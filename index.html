@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Fruit Ninja</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+
+    <div id="hud" class="hidden">
+      <div id="score-panel">
+        <span id="score-icon">🍉</span>
+        <span id="score">0</span>
+      </div>
+      <div id="best-panel">BEST: <span id="best">0</span></div>
+      <div id="lives-panel">
+        <span class="life" data-life="0">❌</span>
+        <span class="life" data-life="1">❌</span>
+        <span class="life" data-life="2">❌</span>
+      </div>
+    </div>
+
+    <div id="combo-popup" class="hidden"></div>
+
+    <div id="menu-screen" class="screen">
+      <h1 class="title"><span class="title-fruit">Fruit</span> <span class="title-ninja">Ninja</span></h1>
+      <p class="subtitle">Swipe to slice the fruit. Don't hit the bombs!</p>
+      <button id="play-btn" class="big-btn">PLAY</button>
+      <p class="hint">Mouse or touch — drag across fruit to slice</p>
+    </div>
+
+    <div id="gameover-screen" class="screen hidden">
+      <h1 class="title-over">GAME OVER</h1>
+      <p id="final-score" class="final-score">Score: 0</p>
+      <p id="new-best" class="new-best hidden">★ NEW BEST! ★</p>
+      <button id="replay-btn" class="big-btn">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
