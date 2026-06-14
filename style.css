@@ -1,3 +1,9 @@
+@font-face {
+  font-family: 'Gang Of Three';
+  src: url('assets/fonts/go3v2.ttf') format('truetype');
+  font-display: swap;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -16,93 +22,112 @@ html, body {
   touch-action: none;
 }
 
-#game-container {
-  position: relative;
+#game-container { position: relative; width: 100%; height: 100%; }
+
+#webgl, #overlay {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-}
-
-#game-canvas {
   display: block;
-  width: 100%;
-  height: 100%;
-  cursor: crosshair;
 }
+#overlay { pointer-events: none; }
+#webgl { cursor: crosshair; }
 
-.hidden {
-  display: none !important;
-}
+.hidden { display: none !important; }
 
 /* ---------- HUD ---------- */
 
 #hud {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  padding: 14px 18px;
+  top: 0; left: 0; right: 0;
+  padding: 14px 20px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   pointer-events: none;
+  z-index: 5;
 }
 
 #score-panel {
-  font-size: 34px;
-  font-weight: bold;
+  font-family: 'Gang Of Three', 'Trebuchet MS', sans-serif;
+  font-size: 46px;
   color: #ffd54a;
-  text-shadow: 2px 2px 0 #5b3000, 0 0 12px rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  text-shadow: 2px 3px 0 #5b3000, 0 0 14px rgba(0,0,0,0.55);
+  display: flex; align-items: center; gap: 10px;
+  letter-spacing: 1px;
 }
+#score-icon { font-size: 30px; }
 
 #best-panel {
+  font-family: 'Gang Of Three', 'Trebuchet MS', sans-serif;
   position: absolute;
-  top: 58px;
-  left: 18px;
-  font-size: 16px;
+  top: 64px; left: 22px;
+  font-size: 20px;
   color: #ffe9a8;
-  text-shadow: 1px 1px 0 #5b3000;
+  letter-spacing: 1px;
+  text-shadow: 1px 2px 0 #5b3000;
 }
 
-#lives-panel {
-  display: flex;
-  gap: 6px;
-  font-size: 26px;
+/* ---- Lives = red X strike marks (Fruit Ninja style) ---- */
+#lives-panel { display: flex; gap: 12px; padding-top: 4px; }
+
+.strike {
+  position: relative;
+  width: 34px; height: 34px;
+  display: inline-block;
+  transform: rotate(var(--j, 0deg));
 }
-
-.life {
-  filter: grayscale(1) opacity(0.35);
-  text-shadow: 0 0 6px rgba(0, 0, 0, 0.7);
-  transition: filter 0.2s, transform 0.2s;
-}
-
-.life.lost {
-  filter: none;
-  transform: scale(1.15);
-}
-
-/* ---------- Combo popup ---------- */
-
-#combo-popup {
+.strike::before, .strike::after {
+  content: '';
   position: absolute;
-  left: 50%;
-  top: 38%;
-  transform: translate(-50%, -50%);
-  font-size: 44px;
-  font-weight: bold;
-  color: #fff176;
-  text-shadow: 3px 3px 0 #b35900, 0 0 18px rgba(255, 200, 0, 0.8);
-  pointer-events: none;
-  animation: combo-pop 0.9s ease-out forwards;
+  top: 50%; left: 50%;
+  width: 40px; height: 10px;
+  border-radius: 6px;
+  /* unfilled = faint carved cross */
+  background: rgba(255, 240, 230, 0.16);
+  box-shadow: inset 0 -1px 2px rgba(0,0,0,0.4);
+  transition: background .2s, box-shadow .2s, filter .2s;
+}
+.strike::before { transform: translate(-50%, -50%) rotate(45deg); }
+.strike::after  { transform: translate(-50%, -50%) rotate(-45deg); }
+
+.strike.lost::before, .strike.lost::after {
+  background: linear-gradient(180deg, #ff6b5a, #d4291c 55%, #a40f07);
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.5),
+    inset 0 2px 2px rgba(255,255,255,0.45),
+    inset 0 -2px 3px rgba(120,0,0,0.6),
+    0 0 12px rgba(255,60,40,0.55);
+}
+.strike.lost { animation: strike-pop .3s ease-out; }
+@keyframes strike-pop {
+  0% { transform: rotate(var(--j,0deg)) scale(1.8); }
+  60% { transform: rotate(var(--j,0deg)) scale(0.9); }
+  100% { transform: rotate(var(--j,0deg)) scale(1); }
 }
 
-@keyframes combo-pop {
-  0%   { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
-  20%  { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-  60%  { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
-  100% { transform: translate(-50%, -70%) scale(1);   opacity: 0; }
+/* ---------- Banner (combo / messages) ---------- */
+
+#banner {
+  font-family: 'Gang Of Three', 'Trebuchet MS', sans-serif;
+  position: absolute;
+  left: 50%; top: 34%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(40px, 8vw, 76px);
+  color: #ffdf5b;
+  text-shadow: 3px 4px 0 #a8500a, 0 0 26px rgba(255,180,40,.9);
+  pointer-events: none;
+  z-index: 6;
+  white-space: nowrap;
+  text-align: center;
+  animation: banner-pop .95s ease-out forwards;
+}
+@keyframes banner-pop {
+  0%   { transform: translate(-50%,-50%) scale(.3) rotate(-6deg); opacity: 0; }
+  20%  { transform: translate(-50%,-50%) scale(1.18) rotate(-3deg); opacity: 1; }
+  60%  { transform: translate(-50%,-50%) scale(1) rotate(-2deg); opacity: 1; }
+  100% { transform: translate(-50%,-72%) scale(1) rotate(-2deg); opacity: 0; }
 }
 
 /* ---------- Screens ---------- */
@@ -115,29 +140,25 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: 22px;
-  background: rgba(10, 5, 0, 0.45);
-  backdrop-filter: blur(2px);
+  background: radial-gradient(ellipse at center, rgba(10,5,0,.2), rgba(5,2,0,.68));
+  z-index: 10;
 }
 
-.title {
-  font-size: clamp(48px, 10vw, 96px);
-  letter-spacing: 2px;
-}
-
-.title-fruit {
-  color: #ff5252;
-  text-shadow: 4px 4px 0 #7a1010, 0 0 24px rgba(255, 80, 80, 0.5);
-}
-
-.title-ninja {
-  color: #ffd54a;
-  text-shadow: 4px 4px 0 #7a5200, 0 0 24px rgba(255, 213, 74, 0.5);
+/* Title card canvas (rendered in JS with the Gang of Three font) */
+#logo {
+  width: min(78vw, 620px);
+  height: auto;
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,.6));
 }
 
 .title-over {
-  font-size: clamp(40px, 9vw, 84px);
+  font-family: 'Gang Of Three', 'Trebuchet MS', sans-serif;
+  font-size: clamp(48px, 11vw, 104px);
   color: #ff5252;
-  text-shadow: 4px 4px 0 #7a1010;
+  -webkit-text-stroke: 3px #4a0d0d;
+  paint-order: stroke fill;
+  text-shadow: 0 5px 0 #4a0d0d, 0 0 22px rgba(255,80,80,.5);
+  letter-spacing: 2px;
 }
 
 .subtitle, .hint {
@@ -147,50 +168,52 @@ html, body {
   text-align: center;
   padding: 0 20px;
 }
-
-.hint {
-  font-size: 14px;
-  opacity: 0.7;
-}
+.hint { font-size: 14px; opacity: .7; }
 
 .final-score {
-  font-size: 32px;
-  color: #ffd54a;
-  text-shadow: 2px 2px 0 #5b3000;
+  font-family: 'Gang Of Three', 'Trebuchet MS', sans-serif;
+  font-size: 42px; color: #ffd54a; text-shadow: 2px 3px 0 #5b3000; letter-spacing: 1px;
 }
-
 .new-best {
-  font-size: 24px;
-  color: #76ff7a;
+  font-family: 'Gang Of Three', 'Trebuchet MS', sans-serif;
+  font-size: 30px; color: #76ff7a;
   text-shadow: 2px 2px 0 #1b5e20;
-  animation: best-blink 0.8s ease-in-out infinite alternate;
+  letter-spacing: 1px;
+  animation: best-blink .8s ease-in-out infinite alternate;
 }
-
 @keyframes best-blink {
-  from { opacity: 0.6; transform: scale(1); }
-  to   { opacity: 1;   transform: scale(1.08); }
+  from { opacity: .6; transform: scale(1); }
+  to   { opacity: 1; transform: scale(1.08); }
 }
 
 .big-btn {
-  font-family: inherit;
-  font-size: 28px;
-  font-weight: bold;
+  font-family: 'Gang Of Three', 'Trebuchet MS', sans-serif;
+  font-size: 36px;
   letter-spacing: 3px;
   color: #fff;
   background: linear-gradient(#ff9800, #e65100);
   border: 3px solid #7a3a00;
   border-radius: 50px;
-  padding: 16px 64px;
+  padding: 14px 72px;
   cursor: pointer;
-  box-shadow: 0 6px 0 #7a3a00, 0 10px 20px rgba(0, 0, 0, 0.5);
-  transition: transform 0.08s, box-shadow 0.08s;
+  box-shadow: 0 6px 0 #7a3a00, 0 10px 22px rgba(0,0,0,.5);
+  transition: transform .08s, box-shadow .08s, filter .1s;
+  text-shadow: 0 2px 2px rgba(0,0,0,.4);
 }
-
-.big-btn:hover {
-  filter: brightness(1.1);
-}
-
+.big-btn:hover { filter: brightness(1.1); }
 .big-btn:active {
   transform: translateY(4px);
-  box-shadow: 0 2px 0 #7a3a00, 0 4px 10px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 0 #7a3a00, 0 4px 10px rgba(0,0,0,.5);
+}
+
+#loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: #ffe9c4;
+  background: #1a0f08;
+  z-index: 20;
 }
