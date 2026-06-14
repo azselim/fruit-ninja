@@ -18,24 +18,16 @@
       </div>
       <div id="best-panel">BEST <span id="best">0</span></div>
       <div id="lives-panel">
-        <span class="life" data-life="0"></span>
-        <span class="life" data-life="1"></span>
-        <span class="life" data-life="2"></span>
+        <span class="strike" data-life="0" style="--j:-8deg"></span>
+        <span class="strike" data-life="1" style="--j:6deg"></span>
+        <span class="strike" data-life="2" style="--j:-4deg"></span>
       </div>
     </div>
 
     <div id="banner" class="hidden"></div>
 
     <div id="menu-screen" class="screen">
-      <div class="logo">
-        <span class="logo-fruit">
-          <span style="--c:#e23b3b">F</span><span style="--c:#ef8b2c">r</span><span style="--c:#f0c020">u</span><span style="--c:#3fae4b">i</span><span style="--c:#2f8f3e">t</span>
-        </span>
-        <span class="logo-ninja">
-          <span style="--c:#d8dde2">N</span><span style="--c:#b9c0c7">i</span><span style="--c:#cdd3d9">n</span><span style="--c:#a9b1b9">j</span><span style="--c:#dfe4e9">a</span>
-        </span>
-        <span class="logo-3d">3D</span>
-      </div>
+      <canvas id="logo" width="1100" height="620"></canvas>
       <p class="subtitle">Slice the fruit — avoid the bombs!</p>
       <button id="play-btn" class="big-btn">PLAY</button>
       <p class="hint">Drag with mouse or finger to swing your blade</p>

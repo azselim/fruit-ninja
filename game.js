@@ -63,46 +63,50 @@ function texFromCanvas(c) {
   return t;
 }
 
-// Background dojo wood plane texture
-function woodTexture() {
-  const c = makeCanvas(512);
-  const b = c.getContext('2d');
-  const g = b.createLinearGradient(0, 0, 0, 512);
-  g.addColorStop(0, '#7a4a1f');
-  g.addColorStop(0.5, '#5e3712');
-  g.addColorStop(1, '#46280c');
-  b.fillStyle = g;
-  b.fillRect(0, 0, 512, 512);
-  const plankH = 64;
-  for (let y = 0; y < 512; y += plankH) {
-    b.fillStyle = 'rgba(0,0,0,0.22)';
-    b.fillRect(0, y, 512, 3);
-    b.strokeStyle = 'rgba(50,26,6,0.35)';
-    b.lineWidth = 1;
-    for (let i = 0; i < 5; i++) {
-      const gy = y + 8 + Math.random() * (plankH - 16);
+// ---------- Background (original first-commit wooden board) ----------
+function drawBoard(b, w, h) {
+  const base = b.createLinearGradient(0, 0, 0, h);
+  base.addColorStop(0, '#8a5a2b');
+  base.addColorStop(0.5, '#6f4518');
+  base.addColorStop(1, '#52300e');
+  b.fillStyle = base;
+  b.fillRect(0, 0, w, h);
+
+  const plankH = 90;
+  for (let y = 0; y < h; y += plankH) {
+    b.fillStyle = 'rgba(0,0,0,0.18)';
+    b.fillRect(0, y, w, 3);
+    b.strokeStyle = 'rgba(60,30,5,0.25)';
+    b.lineWidth = 1.5;
+    const n = 4 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < n; i++) {
+      const gy = y + 10 + Math.random() * (plankH - 20);
       b.beginPath();
       b.moveTo(0, gy);
-      for (let x = 0; x <= 512; x += 32) b.lineTo(x, gy + Math.sin(x * 0.05 + gy) * 3);
+      for (let x = 0; x <= w; x += 60) b.lineTo(x, gy + Math.sin(x * 0.02 + gy) * 4);
       b.stroke();
     }
-    if (Math.random() < 0.6) {
-      const kx = Math.random() * 512, ky = y + plankH * 0.5;
-      b.strokeStyle = 'rgba(35,18,2,0.4)';
-      for (let r = 3; r < 12; r += 3) {
+    if (Math.random() < 0.7) {
+      const kx = Math.random() * w, ky = y + plankH * 0.5;
+      b.strokeStyle = 'rgba(40,20,2,0.35)';
+      for (let r = 3; r < 14; r += 3.5) {
         b.beginPath();
         b.ellipse(kx, ky, r * 1.4, r, 0.2, 0, Math.PI * 2);
         b.stroke();
       }
     }
   }
-  return texFromCanvas(c);
+
+  const v = b.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
+  v.addColorStop(0, 'rgba(0,0,0,0)');
+  v.addColorStop(1, 'rgba(0,0,0,0.45)');
+  b.fillStyle = v;
+  b.fillRect(0, 0, w, h);
 }
 
-// ---------- Background ----------
-const bgTex = woodTexture();
-bgTex.wrapS = bgTex.wrapT = THREE.RepeatWrapping;
-const bgMat = new THREE.MeshLambertMaterial({ map: bgTex });
+const boardCanvas = document.createElement('canvas');
+const bgTex = texFromCanvas(boardCanvas);
+const bgMat = new THREE.MeshBasicMaterial({ map: bgTex }); // unlit: flat painted board like the original
 const bgPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), bgMat);
 bgPlane.position.z = -18;
 scene.add(bgPlane);
@@ -112,8 +116,15 @@ function layoutBackground() {
   const d = camera.position.z - bgPlane.position.z;
   const h = 2 * Math.tan((camera.fov * Math.PI / 180) / 2) * d;
   const w = h * camera.aspect;
-  bgPlane.scale.set(w * 1.1, h * 1.1, 1);
-  bgTex.repeat.set(Math.max(2, w / 16), Math.max(2, h / 16));
+  bgPlane.scale.set(w * 1.04, h * 1.04, 1);
+  // redraw the board at the viewport resolution so planks & vignette match the screen aspect
+  const pw = Math.min(1920, Math.max(640, Math.round(W * DPR)));
+  const ph = Math.min(1920, Math.max(640, Math.round(H * DPR)));
+  if (boardCanvas.width !== pw || boardCanvas.height !== ph) {
+    boardCanvas.width = pw; boardCanvas.height = ph;
+    drawBoard(boardCanvas.getContext('2d'), pw, ph);
+    bgTex.needsUpdate = true;
+  }
 }
 
 // ---------- Fruit definitions ----------
@@ -295,27 +306,68 @@ for (const f of FRUITS) {
 const bombMat = new THREE.MeshPhongMaterial({ color: 0x161616, shininess: 90, specular: 0x888888 });
 const capMat = new THREE.MeshPhongMaterial({ color: 0x2a2a2a, shininess: 60 });
 
+// ---- Leafy tops (pineapple crown, strawberry calyx) ----
+const CROWN_GREENS = [0x2f7a37, 0x3c9a44, 0x4eb155, 0x2a6b30, 0x57bf5e];
+const leafGeo = new THREE.ConeGeometry(0.17, 1, 4); // unit-height blade; scaled per leaf
+function makeBlade(color, len, flat = 0.32) {
+  const m = new THREE.Mesh(leafGeo, new THREE.MeshPhongMaterial({ color, shininess: 16, flatShading: true }));
+  m.scale.set(1, len, flat); // stretch to length, flatten into a blade
+  return m;
+}
+// A spiky pineapple crown: several rings of leaves tilting progressively upright + a center spike
+function makeCrown() {
+  const g = new THREE.Group();
+  const rings = [
+    { count: 7, r: 0.46, len: 0.85, tilt: 1.05 },
+    { count: 6, r: 0.30, len: 1.20, tilt: 0.7 },
+    { count: 5, r: 0.16, len: 1.55, tilt: 0.35 }
+  ];
+  rings.forEach((ring, ri) => {
+    for (let i = 0; i < ring.count; i++) {
+      const a = (i / ring.count) * Math.PI * 2 + ri * 0.45;
+      const len = ring.len * (0.85 + Math.random() * 0.3);
+      const blade = makeBlade(CROWN_GREENS[(i + ri) % CROWN_GREENS.length], len);
+      blade.position.set(Math.cos(a) * ring.r, len * 0.42, Math.sin(a) * ring.r);
+      blade.rotation.x = Math.sin(a) * ring.tilt;
+      blade.rotation.z = -Math.cos(a) * ring.tilt;
+      blade.rotation.y = (Math.random() - 0.5) * 0.4;
+      g.add(blade);
+    }
+  });
+  const spike = makeBlade(CROWN_GREENS[1], 1.8);
+  spike.position.y = 0.78;
+  g.add(spike);
+  return g;
+}
+// A small strawberry calyx (star of little leaves)
+function makeCalyx() {
+  const g = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const leaf = makeBlade(0x3fa14a, 0.5, 0.45);
+    leaf.position.set(Math.cos(a) * 0.16, 0.06, Math.sin(a) * 0.16);
+    leaf.rotation.x = Math.sin(a) * 1.15;
+    leaf.rotation.z = -Math.cos(a) * 1.15;
+    g.add(leaf);
+  }
+  return g;
+}
+function addTop(f, g) {
+  if (f.crown) { const c = makeCrown(); c.position.y = f.scale[1] * 0.94; c.scale.setScalar(0.95); g.add(c); }
+  if (f.berry) { const c = makeCalyx(); c.position.y = f.scale[1] * 0.92; g.add(c); }
+}
+
 function makeWholeFruit(f) {
   const g = new THREE.Group();
   const m = new THREE.Mesh(UNIT_SPHERE, f.rindMat);
   m.scale.set(f.scale[0], f.scale[1], f.scale[2]);
   g.add(m);
-  if (f.crown) {
-    const crown = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.1, 6), new THREE.MeshPhongMaterial({ color: 0x3c8a3c, shininess: 20 }));
-    crown.position.y = f.scale[1] + 0.4;
-    g.add(crown);
-  }
-  if (f.berry) {
-    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.5, 5), new THREE.MeshPhongMaterial({ color: 0x3c8a3c, shininess: 20 }));
-    leaf.position.y = f.scale[1] * 0.85;
-    leaf.rotation.x = Math.PI;
-    g.add(leaf);
-  }
+  addTop(f, g);
   g.scale.setScalar(f.r);
   return g;
 }
 
-// a half = dome (rind) + flat cap (flesh)
+// a half = dome (rind) + flat cap (flesh); the leafy top rides along on the top half
 function makeHalf(f, top) {
   const g = new THREE.Group();
   const dome = new THREE.Mesh(top ? TOP_DOME : BOT_DOME, f.rindMat);
@@ -326,6 +378,7 @@ function makeHalf(f, top) {
   // CircleGeometry lies in XY facing +Z; rotate to the equatorial (XZ) plane
   cap.rotation.x = top ? Math.PI / 2 : -Math.PI / 2;
   g.add(cap);
+  if (top) addTop(f, g);
   g.scale.setScalar(f.r);
   return g;
 }
@@ -673,7 +726,7 @@ let shakeT = 0, flashT = 0;
 function updateHUD() {
   scoreEl.textContent = score;
   bestEl.textContent = Math.max(best, score);
-  document.querySelectorAll('.life').forEach((el, i) => el.classList.toggle('lost', i < 3 - lives));
+  document.querySelectorAll('.strike').forEach((el, i) => el.classList.toggle('lost', i < 3 - lives));
 }
 
 let bannerTimeout = null;
@@ -880,10 +933,141 @@ function loop(t) {
   requestAnimationFrame(loop);
 }
 
+// ---------- Title card logo (rendered with the Gang of Three font) ----------
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  if (amt >= 0) { r += (255 - r) * amt; g += (255 - g) * amt; b += (255 - b) * amt; }
+  else { r *= (1 + amt); g *= (1 + amt); b *= (1 + amt); }
+  return `rgb(${r | 0},${g | 0},${b | 0})`;
+}
+
+// render a word into its own canvas with dark outline, per-letter gradient, gloss + droplets
+function glossyWord(text, size, spacing, opts) {
+  const pad = size * 0.5;
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d');
+  ctx.font = `${size}px "Gang Of Three"`;
+  const widths = [...text].map(ch => ctx.measureText(ch).width);
+  const total = widths.reduce((a, b) => a + b, 0) + spacing * (text.length - 1);
+  c.width = Math.ceil(total + pad * 2);
+  c.height = Math.ceil(size * 1.7);
+  const b = c.getContext('2d');
+  b.font = `${size}px "Gang Of Three"`;
+  b.textBaseline = 'alphabetic';
+  b.lineJoin = 'round';
+  b.lineCap = 'round';
+  const baseY = size * 1.15;
+  let x = pad;
+  const centers = [];
+  [...text].forEach((ch, i) => {
+    const w = widths[i];
+    b.strokeStyle = opts.outlineColor;
+    b.lineWidth = size * opts.outlineW;
+    b.strokeText(ch, x, baseY);
+    let fill;
+    if (opts.metallic) {
+      fill = b.createLinearGradient(0, baseY - size, 0, baseY + size * 0.1);
+      fill.addColorStop(0.00, '#fbfdff');
+      fill.addColorStop(0.34, '#c6cfd7');
+      fill.addColorStop(0.50, '#828c95');
+      fill.addColorStop(0.56, '#6a737b');
+      fill.addColorStop(0.72, '#dfe6ec');
+      fill.addColorStop(1.00, '#a9b2bb');
+    } else {
+      const col = opts.colors[i];
+      fill = b.createLinearGradient(0, baseY - size, 0, baseY);
+      fill.addColorStop(0, shade(col, 0.5));
+      fill.addColorStop(0.5, col);
+      fill.addColorStop(1, shade(col, -0.42));
+    }
+    b.fillStyle = fill;
+    b.fillText(ch, x, baseY);
+    centers.push(x + w / 2);
+    x += w + spacing;
+  });
+
+  // gloss + droplets, scoped to the letters only
+  b.globalCompositeOperation = 'source-atop';
+  const gl = b.createLinearGradient(0, baseY - size, 0, baseY - size * 0.2);
+  gl.addColorStop(0, 'rgba(255,255,255,0.6)');
+  gl.addColorStop(0.6, 'rgba(255,255,255,0.12)');
+  gl.addColorStop(1, 'rgba(255,255,255,0)');
+  b.fillStyle = gl;
+  b.fillRect(0, baseY - size, c.width, size);
+  if (!opts.noDrops) {
+    for (let i = 0; i < 26; i++) {
+      const dx = pad + Math.random() * total;
+      const dy = baseY - size * (0.15 + Math.random() * 0.8);
+      const r = 2 + Math.random() * 5;
+      b.fillStyle = 'rgba(255,255,255,0.28)';
+      b.beginPath(); b.ellipse(dx, dy, r, r * 1.25, 0, 0, 7); b.fill();
+      b.fillStyle = 'rgba(255,255,255,0.85)';
+      b.beginPath(); b.arc(dx - r * 0.3, dy - r * 0.4, r * 0.35, 0, 7); b.fill();
+    }
+  }
+  b.globalCompositeOperation = 'source-over';
+  return { canvas: c, centers, baseY, size, pad };
+}
+
+function drawLeafSprout(ctx, x, y, s) {
+  const leaf = (ang, len) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(ang);
+    const g = ctx.createLinearGradient(0, 0, 0, -len);
+    g.addColorStop(0, '#3f9b2e');
+    g.addColorStop(1, '#7ed957');
+    ctx.fillStyle = g;
+    ctx.strokeStyle = '#235c18';
+    ctx.lineWidth = s * 0.06;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(len * 0.5, -len * 0.5, 0, -len);
+    ctx.quadraticCurveTo(-len * 0.5, -len * 0.5, 0, 0);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(35,92,24,0.7)';
+    ctx.lineWidth = s * 0.04;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -len); ctx.stroke();
+    ctx.restore();
+  };
+  leaf(-0.35, s * 1.5);
+  leaf(0.35, s * 1.5);
+  leaf(0, s * 1.7);
+}
+
+function buildLogo() {
+  const c = document.getElementById('logo');
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+
+  const fruit = glossyWord('Fruit', 210, 4, {
+    colors: ['#7b2fb0', '#e0271f', '#f08200', '#f5b50a', '#3f9b2e'],
+    outlineColor: '#2c1206', outlineW: 0.05
+  });
+  const ninja = glossyWord('Ninja', 150, 8, {
+    metallic: true, outlineColor: '#1b2128', outlineW: 0.08, noDrops: false
+  });
+
+  // place FRUIT centered upper, NINJA lower-right overlapping
+  const fx = (c.width - fruit.canvas.width) / 2;
+  const fy = 30;
+  const nx = (c.width - ninja.canvas.width) / 2 + 120;
+  const ny = 300;
+  ctx.drawImage(ninja.canvas, nx, ny);
+  ctx.drawImage(fruit.canvas, fx, fy);
+
+  // leaf sprout growing out of the dot of the "i" (4th glyph)
+  const iCenter = fx + fruit.centers[3];
+  const iTop = fy + fruit.baseY - fruit.size * 0.82;
+  drawLeafSprout(ctx, iCenter + 4, iTop, 30);
+}
+
 // ---------- Debug hook (used only by automated tests; harmless in normal play) ----------
 window.__FN_FRUITS = () => fruits.filter(e => !e.dead).map(e => {
   const s = worldToScreen(e.obj.position);
-  return { x: s.x, y: s.y, r: e.r * (H / viewH), bomb: e.isBomb };
+  return { x: s.x, y: s.y, r: e.r * (H / viewH), bomb: e.isBomb, name: e.isBomb ? 'bomb' : e.f.name };
 });
 
 // ---------- Boot ----------
@@ -891,3 +1075,12 @@ resize();
 updateHUD();
 loadSounds(() => { loadingEl.classList.add('hidden'); });
 requestAnimationFrame(loop);
+
+// build the title card once the Gang of Three font is ready (fall back if it isn't)
+function tryBuildLogo() { try { buildLogo(); } catch (e) {} }
+if (document.fonts && document.fonts.load) {
+  document.fonts.load('200px "Gang Of Three"').then(() => { tryBuildLogo(); }).catch(tryBuildLogo);
+  document.fonts.ready.then(tryBuildLogo);
+} else {
+  setTimeout(tryBuildLogo, 300);
+}
