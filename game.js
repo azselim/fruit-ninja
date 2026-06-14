@@ -969,7 +969,7 @@ function hitBomb(e) {
     spawnJuice(e.obj.position, 0xa86c2c, 22);
     addSplat(sp.x, sp.y, '#7a4a1e');
     addSplat(sp.x, sp.y, '#a86c2c');
-    addPopup(sp.x, sp.y - 30, '❌ allergy', '#ffe9c4');
+    addPopup(sp.x, sp.y - 30, '❌ texture autism', '#ffe9c4');
   } else {
     play('Bomb-explode', 1);
     flashT = 0.3; shakeT = 0.6; endingT = 1.2;
