@@ -5,6 +5,29 @@
 
 import * as THREE from './lib/three.module.js';
 
+// Resolve assets relative to this module (so /sushi/ and / both work).
+const ASSET_BASE = new URL('.', import.meta.url);
+
+// ---------- Theme ----------
+// The engine is shared; a theme swaps the item set, the hazard, the logo,
+// labels and a few cosmetics. Default is the classic fruit game.
+const THEME_KEY = (window.FN_THEME === 'sushi') ? 'sushi' : 'fruit';
+const THEMES = {
+  fruit: {
+    comboWord: 'FRUIT', bestKey: 'fruit-ninja-best',
+    hazard: 'bomb', hazardFuse: true, startMessage: null,
+    logoWords: ['Fruit', 'Ninja'],
+    logoColors: ['#7b2fb0', '#e0271f', '#f08200', '#f5b50a', '#3f9b2e']
+  },
+  sushi: {
+    comboWord: 'SUSHI', bestKey: 'sushi-ninja-best',
+    hazard: 'milk', hazardFuse: false, startMessage: 'hi bhenchod',
+    logoWords: ['Sushi', 'Ninja'],
+    logoColors: ['#e8612e', '#f0a818', '#2f6f3a', '#e23b53', '#1f1f1f']
+  }
+};
+const THEME = THEMES[THEME_KEY];
+
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
 const glCanvas = $('webgl');
@@ -300,14 +323,104 @@ const FRUITS = [
   }
 ];
 
+// ---------- Sushi theme items ----------
+// Shared exterior/section painters
+function noriBg(b, s) {
+  b.fillStyle = '#16271c'; b.fillRect(0, 0, s, s);
+  b.fillStyle = 'rgba(46,78,56,0.45)';
+  for (let i = 0; i < 220; i++) b.fillRect(Math.random() * s, Math.random() * s, 2, 1);
+  b.fillStyle = 'rgba(0,0,0,0.28)';
+  for (let i = 0; i < 7; i++) b.fillRect(i * s / 7, 0, 1.5, s);
+}
+function riceBg(b, s, sesame) {
+  b.fillStyle = '#f8f4ec'; b.fillRect(0, 0, s, s);
+  b.fillStyle = 'rgba(223,215,198,0.85)';
+  for (let i = 0; i < 260; i++) {
+    b.save(); b.translate(Math.random() * s, Math.random() * s); b.rotate(Math.random() * 7);
+    b.fillRect(-3, -1.3, 6, 2.6); b.restore();
+  }
+  if (sesame) for (let i = 0; i < 46; i++) {
+    b.fillStyle = Math.random() < 0.5 ? '#fffaf0' : '#3a2a16';
+    b.beginPath(); b.ellipse(Math.random() * s, Math.random() * s, 2, 3.2, Math.random(), 0, 7); b.fill();
+  }
+}
+function riceGrains(b, s, rr) {
+  const c = s / 2;
+  b.fillStyle = 'rgba(222,214,197,0.9)';
+  for (let i = 0; i < 110; i++) {
+    const a = Math.random() * 7, d = Math.random() * c * rr;
+    b.save(); b.translate(c + Math.cos(a) * d, c + Math.sin(a) * d); b.rotate(Math.random() * 7);
+    b.fillRect(-2.5, -1, 5, 2); b.restore();
+  }
+}
+function rings(b, s, layers) {
+  const c = s / 2;
+  for (const L of layers) { b.fillStyle = L.c; b.beginPath(); b.arc(c, c, c * L.r, 0, 7); b.fill(); }
+}
+
+const SUSHI = [
+  { // tuna maki roll
+    name: 'tuna-maki', r: 1.7, scale: [1, 0.95, 1], score: 1, juice: '#c0392b', sound: 'Impact-Watermelon', cyl: true,
+    rind: noriBg,
+    flesh(b, s) { rings(b, s, [{ r: 1, c: '#16271c' }, { r: 0.9, c: '#f8f4ec' }]); riceGrains(b, s, 0.9); rings(b, s, [{ r: 0.36, c: '#c0392b' }, { r: 0.16, c: '#e0584a' }]); }
+  },
+  { // cucumber maki (kappa)
+    name: 'cucumber-maki', r: 1.6, scale: [1, 0.95, 1], score: 1, juice: '#7cc36a', sound: 'Impact-kiwifruit', cyl: true,
+    rind: noriBg,
+    flesh(b, s) { rings(b, s, [{ r: 1, c: '#16271c' }, { r: 0.9, c: '#f8f4ec' }]); riceGrains(b, s, 0.9); rings(b, s, [{ r: 0.34, c: '#3f8f44' }, { r: 0.26, c: '#9ed98a' }, { r: 0.12, c: '#eafbe3' }]); }
+  },
+  { // avocado maki
+    name: 'avocado-maki', r: 1.6, scale: [1, 0.95, 1], score: 1, juice: '#9cc06a', sound: 'Impact-Plum', cyl: true,
+    rind: noriBg,
+    flesh(b, s) { rings(b, s, [{ r: 1, c: '#16271c' }, { r: 0.9, c: '#f8f4ec' }]); riceGrains(b, s, 0.9); rings(b, s, [{ r: 0.36, c: '#8fb85a' }, { r: 0.18, c: '#cfe39a' }]); }
+  },
+  { // california roll (rice outside, sesame)
+    name: 'california', r: 1.75, scale: [1.05, 0.98, 1.05], score: 1, juice: '#f0894c', sound: 'Impact-Orange', cyl: true,
+    rind(b, s) { riceBg(b, s, true); },
+    flesh(b, s) { rings(b, s, [{ r: 1, c: '#f1ead8' }]); riceGrains(b, s, 1); rings(b, s, [{ r: 0.62, c: '#1a2c20' }, { r: 0.56, c: '#f8f4ec' }, { r: 0.4, c: '#f0894c' }, { r: 0.22, c: '#9cc06a' }]); }
+  },
+  { // ikura gunkan (nori battleship + roe)
+    name: 'ikura', r: 1.6, scale: [1, 1.05, 1], score: 1, juice: '#ff7a18', sound: 'Impact-Strawberry', cyl: true, top: 'roe',
+    rind: noriBg,
+    flesh(b, s) { rings(b, s, [{ r: 1, c: '#16271c' }, { r: 0.82, c: '#f8f4ec' }]); riceGrains(b, s, 0.82); }
+  },
+  { // salmon nigiri
+    name: 'salmon-nigiri', r: 1.85, scale: [1.5, 0.72, 1.0], score: 1, juice: '#ff8a50', sound: 'Impact-Apple', top: 'salmon',
+    rind(b, s) { riceBg(b, s, false); },
+    flesh(b, s) { rings(b, s, [{ r: 1, c: '#f8f4ec' }]); riceGrains(b, s, 0.95); rings(b, s, [{ r: 0.16, c: '#ffb38a' }]); }
+  },
+  { // tamago nigiri (egg + nori belt)
+    name: 'tamago-nigiri', r: 1.85, scale: [1.5, 0.72, 1.0], score: 1, juice: '#ffd86b', sound: 'Impact-Pineapple', top: 'tamago',
+    rind(b, s) { riceBg(b, s, false); },
+    flesh(b, s) { rings(b, s, [{ r: 1, c: '#f8f4ec' }]); riceGrains(b, s, 0.95); }
+  },
+  { // ebi (shrimp) nigiri
+    name: 'ebi-nigiri', r: 1.85, scale: [1.5, 0.72, 1.0], score: 1, juice: '#ff9aa6', sound: 'Impact-Coconut', top: 'ebi',
+    rind(b, s) { riceBg(b, s, false); },
+    flesh(b, s) { rings(b, s, [{ r: 1, c: '#f8f4ec' }]); riceGrains(b, s, 0.95); rings(b, s, [{ r: 0.14, c: '#ffd7c0' }]); }
+  },
+  { // wasabi — rare bonus, big points
+    name: 'wasabi', r: 1.15, scale: [1, 0.82, 1], score: 5, weight: 0.28, bonus: true, juice: '#7fae2e', sound: 'Impact-kiwifruit',
+    rind(b, s) {
+      b.fillStyle = '#9ec93f'; b.fillRect(0, 0, s, s);
+      b.fillStyle = 'rgba(110,150,40,0.5)';
+      for (let i = 0; i < 60; i++) b.fillRect(Math.random() * s, Math.random() * s, 3, 3);
+    },
+    flesh(b, s) { rings(b, s, [{ r: 1, c: '#b7df5a' }, { r: 0.7, c: '#9ec93f' }, { r: 0.3, c: '#88b531' }]); }
+  }
+];
+
+const ITEMS = THEME_KEY === 'sushi' ? SUSHI : FRUITS;
+
 // shared geometries
 const UNIT_SPHERE = new THREE.SphereGeometry(1, 36, 26);
 const TOP_DOME = new THREE.SphereGeometry(1, 36, 18, 0, Math.PI * 2, 0, Math.PI / 2);
 const BOT_DOME = new THREE.SphereGeometry(1, 36, 18, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
 const CAP = new THREE.CircleGeometry(1, 36);
+const CYL = new THREE.CylinderGeometry(1, 1, 1, 30); // unit roll (axis Y), groups: side/top/bottom
 
-// build & cache materials per fruit
-for (const f of FRUITS) {
+// build & cache materials per item (fruit or sushi)
+for (const f of ITEMS) {
   const rc = makeCanvas(256); f.rind(rc.getContext('2d'), 256);
   const fc = makeCanvas(256); f.flesh(fc.getContext('2d'), 256);
   f.rindTex = texFromCanvas(rc);
@@ -328,17 +441,19 @@ const CROWN_GREENS = [0x2f7a37, 0x3c9a44, 0x4eb155, 0x2a6b30, 0x57bf5e];
 const leafGeo = new THREE.ConeGeometry(0.17, 1, 4).toNonIndexed(); // unit-height blade
 const leafMat = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 16, flatShading: true });
 
-// blade spec: { color, len, flat, pos:[x,y,z], rotX, rotY, rotZ }
-function bakeLeaves(specs) {
+// Bake many transformed copies of baseGeo into one vertex-colored geometry (1 draw call).
+// spec: { color, pos:[x,y,z], scale:[sx,sy,sz], rot:[rx,ry,rz] }
+function bakeMerged(baseGeo, specs) {
   const positions = [], normals = [], colors = [];
   const m = new THREE.Matrix4(), nmat = new THREE.Matrix3();
   const q = new THREE.Quaternion(), eul = new THREE.Euler();
   const v = new THREE.Vector3(), n = new THREE.Vector3(), col = new THREE.Color();
-  const posAttr = leafGeo.attributes.position, norAttr = leafGeo.attributes.normal;
+  const posAttr = baseGeo.attributes.position, norAttr = baseGeo.attributes.normal;
   for (const s of specs) {
-    eul.set(s.rotX || 0, s.rotY || 0, s.rotZ || 0, 'XYZ');
+    const r = s.rot || [0, 0, 0], sc = s.scale || [1, 1, 1];
+    eul.set(r[0], r[1], r[2], 'XYZ');
     q.setFromEuler(eul);
-    m.compose(new THREE.Vector3(s.pos[0], s.pos[1], s.pos[2]), q, new THREE.Vector3(1, s.len, s.flat));
+    m.compose(new THREE.Vector3(s.pos[0], s.pos[1], s.pos[2]), q, new THREE.Vector3(sc[0], sc[1], sc[2]));
     nmat.getNormalMatrix(m);
     col.set(s.color);
     for (let i = 0; i < posAttr.count; i++) {
@@ -358,23 +473,24 @@ function bakeLeaves(specs) {
 
 function crownSpecs() {
   const specs = [];
-  const rings = [
+  const ringDefs = [
     { count: 7, r: 0.46, len: 0.85, tilt: 1.05 },
     { count: 6, r: 0.30, len: 1.20, tilt: 0.7 },
     { count: 5, r: 0.16, len: 1.55, tilt: 0.35 }
   ];
-  rings.forEach((ring, ri) => {
+  ringDefs.forEach((ring, ri) => {
     for (let i = 0; i < ring.count; i++) {
       const a = (i / ring.count) * Math.PI * 2 + ri * 0.45;
       const len = ring.len * (0.85 + Math.random() * 0.3);
       specs.push({
-        color: CROWN_GREENS[(i + ri) % CROWN_GREENS.length], len, flat: 0.32,
+        color: CROWN_GREENS[(i + ri) % CROWN_GREENS.length],
         pos: [Math.cos(a) * ring.r, len * 0.42, Math.sin(a) * ring.r],
-        rotX: Math.sin(a) * ring.tilt, rotZ: -Math.cos(a) * ring.tilt, rotY: (Math.random() - 0.5) * 0.4
+        scale: [1, len, 0.32],
+        rot: [Math.sin(a) * ring.tilt, (Math.random() - 0.5) * 0.4, -Math.cos(a) * ring.tilt]
       });
     }
   });
-  specs.push({ color: CROWN_GREENS[1], len: 1.8, flat: 0.32, pos: [0, 0.78, 0] });
+  specs.push({ color: CROWN_GREENS[1], pos: [0, 0.78, 0], scale: [1, 1.8, 0.32] });
   return specs;
 }
 function calyxSpecs() {
@@ -382,25 +498,60 @@ function calyxSpecs() {
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2;
     specs.push({
-      color: 0x3fa14a, len: 0.5, flat: 0.45,
-      pos: [Math.cos(a) * 0.16, 0.06, Math.sin(a) * 0.16],
-      rotX: Math.sin(a) * 1.15, rotZ: -Math.cos(a) * 1.15
+      color: 0x3fa14a, pos: [Math.cos(a) * 0.16, 0.06, Math.sin(a) * 0.16],
+      scale: [1, 0.5, 0.45], rot: [Math.sin(a) * 1.15, 0, -Math.cos(a) * 1.15]
     });
   }
   return specs;
 }
-const CROWN_GEO = bakeLeaves(crownSpecs());
-const CALYX_GEO = bakeLeaves(calyxSpecs());
+const CROWN_GEO = bakeMerged(leafGeo, crownSpecs());
+const CALYX_GEO = bakeMerged(leafGeo, calyxSpecs());
 function makeCrown() { return new THREE.Mesh(CROWN_GEO, leafMat); }
 function makeCalyx() { return new THREE.Mesh(CALYX_GEO, leafMat); }
+
+// ---- Sushi toppings (cached geometry + material; merged where multi-part) ----
+const BOX = new THREE.BoxGeometry(1, 1, 1);
+function fishTex(base, stripe, lines) {
+  const c = makeCanvas(128), b = c.getContext('2d');
+  b.fillStyle = base; b.fillRect(0, 0, 128, 128);
+  b.strokeStyle = stripe; b.lineWidth = 6;
+  for (let i = -1; i < 6; i++) { b.beginPath(); b.moveTo(0, i * 24); b.bezierCurveTo(40, i * 24 + 14, 90, i * 24 - 6, 128, i * 24 + 10); b.stroke(); }
+  if (lines) { b.strokeStyle = lines; b.lineWidth = 3; for (let i = 0; i < 5; i++) { b.beginPath(); b.moveTo(0, 14 + i * 26); b.lineTo(128, 14 + i * 26); b.stroke(); } }
+  return texFromCanvas(c);
+}
+const salmonMat = new THREE.MeshPhongMaterial({ map: fishTex('#ff8a50', '#ffd2b3', null), shininess: 45, specular: 0x553322 });
+const ebiMat = new THREE.MeshPhongMaterial({ map: fishTex('#ff9aa6', '#fff2f3', '#e2566a'), shininess: 45, specular: 0x553333 });
+const tamagoMat = new THREE.MeshPhongMaterial({ color: 0xf6c63a, shininess: 28, specular: 0x4a3a10 });
+const noriBeltMat = new THREE.MeshPhongMaterial({ color: 0x16271c, shininess: 18 });
+const roeMat = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 85, specular: 0x884422 });
+const roeBase = new THREE.SphereGeometry(1, 8, 6);
+function roeSpecs() {
+  const specs = [], cols = ['#ff8a1e', '#ff7414', '#ff9c38'];
+  for (let i = 0; i < 20; i++) {
+    const a = Math.random() * 7, rad = Math.random() * 0.55;
+    specs.push({ color: cols[i % 3], pos: [Math.cos(a) * rad, 0.12 + (0.55 - rad) * 0.6, Math.sin(a) * rad], scale: [0.17, 0.17, 0.17] });
+  }
+  return specs;
+}
+const ROE_GEO = bakeMerged(roeBase, roeSpecs());
+
 function addTop(f, g) {
   if (f.crown) { const c = makeCrown(); c.position.y = f.scale[1] * 0.94; c.scale.setScalar(0.95); g.add(c); }
   if (f.berry) { const c = makeCalyx(); c.position.y = f.scale[1] * 0.92; g.add(c); }
+  if (f.top === 'salmon') { const m = new THREE.Mesh(UNIT_SPHERE, salmonMat); m.scale.set(1.34, 0.26, 0.84); m.position.y = f.scale[1] * 0.82; g.add(m); }
+  if (f.top === 'ebi') { const m = new THREE.Mesh(UNIT_SPHERE, ebiMat); m.scale.set(1.36, 0.26, 0.74); m.position.y = f.scale[1] * 0.82; g.add(m); }
+  if (f.top === 'tamago') {
+    const egg = new THREE.Mesh(BOX, tamagoMat); egg.scale.set(1.36, 0.52, 0.86); egg.position.y = f.scale[1] * 0.72; g.add(egg);
+    const belt = new THREE.Mesh(BOX, noriBeltMat); belt.scale.set(0.34, 1.05, 0.94); belt.position.y = f.scale[1] * 0.55; g.add(belt);
+  }
+  if (f.top === 'roe') { const m = new THREE.Mesh(ROE_GEO, roeMat); m.position.y = f.scale[1] * 0.72; g.add(m); }
 }
 
-function makeWholeFruit(f) {
+function makeWhole(f) {
   const g = new THREE.Group();
-  const m = new THREE.Mesh(UNIT_SPHERE, f.rindMat);
+  let m;
+  if (f.cyl) m = new THREE.Mesh(CYL, [f.rindMat, f.fleshMat, f.fleshMat]); // side, top, bottom
+  else m = new THREE.Mesh(UNIT_SPHERE, f.rindMat);
   m.scale.set(f.scale[0], f.scale[1], f.scale[2]);
   g.add(m);
   addTop(f, g);
@@ -457,7 +608,7 @@ function loadSounds(done) {
   const finish = () => { if (!finished) { finished = true; done(); } };
   const tick = () => { if (++loaded >= total) finish(); };
   SOUND_NAMES.forEach(name => {
-    fetch(`assets/sounds/${name}.wav`)
+    fetch(new URL(`assets/sounds/${name}.wav`, ASSET_BASE))
       .then(r => r.arrayBuffer())
       .then(buf => actx.decodeAudioData(buf))
       .then(b => { buffers[name] = b; })
@@ -496,8 +647,8 @@ class Entity {
     this.dead = false;
     this.sliced = false;
     this.fuseT = 0;
-    this.obj = isBomb ? makeBomb() : makeWholeFruit(f);
-    this.r = isBomb ? 1.7 : f.r;
+    this.obj = isBomb ? makeHazard() : makeWhole(f);
+    this.r = isBomb ? HAZARD_R : f.r;
     this.spin = new THREE.Vector3((Math.random() - .5) * 4, (Math.random() - .5) * 4, (Math.random() - .5) * 4);
     this.vel = new THREE.Vector3();
     scene.add(this.obj);
@@ -509,7 +660,7 @@ class Entity {
     this.obj.rotation.x += this.spin.x * dt;
     this.obj.rotation.y += this.spin.y * dt;
     this.obj.rotation.z += this.spin.z * dt;
-    if (this.isBomb) {
+    if (this.isBomb && THEME.hazardFuse) {
       this.fuseT += dt;
       if (Math.random() < 0.4) spawnSpark(this.fuseTip());
     }
@@ -546,6 +697,30 @@ function makeBomb() {
   g.userData.tip = tip;
   return g;
 }
+
+// ---- Milk glass hazard (sushi theme) ----
+const GLASS_GEO = new THREE.CylinderGeometry(0.62, 0.5, 1.15, 26, 1, true); // open tube
+const MILK_GEO = new THREE.CylinderGeometry(0.58, 0.47, 0.92, 26);
+const GLASS_BASE_GEO = new THREE.CylinderGeometry(0.5, 0.52, 0.08, 26);
+const glassMat = new THREE.MeshPhongMaterial({ color: 0xdfeeff, shininess: 110, specular: 0xffffff, transparent: true, opacity: 0.34, side: THREE.DoubleSide });
+const milkMat = new THREE.MeshPhongMaterial({ color: 0xfffdf7, shininess: 22, specular: 0x999999 });
+const HAZARD_R = THEME.hazard === 'milk' ? 1.5 : 1.7;
+
+function makeMilk() {
+  const g = new THREE.Group();
+  const milk = new THREE.Mesh(MILK_GEO, milkMat);
+  milk.position.y = -0.08;
+  g.add(milk);
+  const glass = new THREE.Mesh(GLASS_GEO, glassMat);
+  g.add(glass);
+  const base = new THREE.Mesh(GLASS_BASE_GEO, glassMat);
+  base.position.y = -0.62;
+  g.add(base);
+  g.scale.setScalar(2.1); // match the visual scale of fruit/bombs
+  return g;
+}
+
+function makeHazard() { return THEME.hazard === 'milk' ? makeMilk() : makeBomb(); }
 
 // ---------- Pieces (halves + juice droplets) ----------
 class Piece {
@@ -698,7 +873,8 @@ function sliceFruit(e, screenAngle, sp) {
   // scoring
   let points = f.score;
   let label = '+' + points, color = '#fff59d';
-  if (Math.random() < 0.07) { points += 5; label = 'CRITICAL +' + points; color = '#80d8ff'; }
+  if (f.bonus) { label = f.name === 'wasabi' ? 'WASABI! +' + points : 'BONUS +' + points; color = '#aef25a'; }
+  else if (Math.random() < 0.07) { points += 5; label = 'CRITICAL +' + points; color = '#80d8ff'; }
   score += points;
   addPopup(sp.x, sp.y - 30, label, color);
   updateHUD();
@@ -710,12 +886,24 @@ function sliceFruit(e, screenAngle, sp) {
 function hitBomb(e) {
   e.dead = true; e.sliced = true;
   e.remove();
-  play('Bomb-explode', 1);
-  flashT = 0.3; shakeT = 0.6; endingT = 1.2;
+  const milk = THEME.hazard === 'milk';
   const sp = worldToScreen(e.obj.position);
-  for (let i = 0; i < 60; i++) sparks.push({ x: sp.x, y: sp.y, vx: (Math.random() - .5) * 600, vy: (Math.random() - .5) * 600, t: 0, life: 0.4 + Math.random() * 0.5 });
-  addSplat(sp.x, sp.y, '#3a3a3a');
-  // blow nearby fruit away
+  if (milk) {
+    play('Splatter-Medium-1', 1); play('Bomb-explode', 0.4);
+    flashT = 0.22; shakeT = 0.5; endingT = 1.2;
+    // white milk spray + droplets
+    for (let i = 0; i < 50; i++) sparks.push({ x: sp.x, y: sp.y, vx: (Math.random() - .5) * 520, vy: (Math.random() - .5) * 520, t: 0, life: 0.4 + Math.random() * 0.5, milk: true });
+    spawnJuice(e.obj.position, 0xfffdf7, 22);
+    addSplat(sp.x, sp.y, '#fbf7ee');
+    addSplat(sp.x, sp.y, '#fffdf7');
+    addPopup(sp.x, sp.y - 30, '❌ lactose', '#fff');
+  } else {
+    play('Bomb-explode', 1);
+    flashT = 0.3; shakeT = 0.6; endingT = 1.2;
+    for (let i = 0; i < 60; i++) sparks.push({ x: sp.x, y: sp.y, vx: (Math.random() - .5) * 600, vy: (Math.random() - .5) * 600, t: 0, life: 0.4 + Math.random() * 0.5 });
+    addSplat(sp.x, sp.y, '#3a3a3a');
+  }
+  // blow nearby items away
   for (const o of fruits) {
     if (o.dead) continue;
     o.vel.x += (o.obj.position.x - e.obj.position.x) * 1.5 + (Math.random() - .5) * 8;
@@ -740,7 +928,7 @@ function resolveCombo() {
   if (comboCount >= 3) {
     const bonus = comboCount;
     score += bonus;
-    showBanner(comboCount + ' FRUIT COMBO!  +' + bonus);
+    showBanner(comboCount + ' ' + THEME.comboWord + ' COMBO!  +' + bonus);
     play('combo-' + Math.min(5, comboCount - 2), 0.8);
     updateHUD();
   }
@@ -748,8 +936,14 @@ function resolveCombo() {
 }
 
 // ---------- Spawning ----------
+const TOTAL_WEIGHT = ITEMS.reduce((a, it) => a + (it.weight || 1), 0);
+function pickItem() {
+  let r = Math.random() * TOTAL_WEIGHT;
+  for (const it of ITEMS) { r -= (it.weight || 1); if (r <= 0) return it; }
+  return ITEMS[0];
+}
 function launch(isBomb) {
-  const f = FRUITS[Math.floor(Math.random() * FRUITS.length)];
+  const f = pickItem();
   const e = new Entity(f, isBomb);
   const x = (Math.random() - 0.5) * viewW * 0.7;
   const y = -viewH / 2 - 3;
@@ -764,7 +958,7 @@ function launch(isBomb) {
   e.vel.set(vx, vy, (Math.random() - 0.5) * 2);
   fruits.push(e);
   play(isBomb ? 'Throw-bomb' : 'Throw-fruit', 0.4);
-  if (isBomb) play('player-bomb-ready', 0.3);
+  if (isBomb && THEME.hazardFuse) play('player-bomb-ready', 0.3);
 }
 
 function spawnWave() {
@@ -786,9 +980,9 @@ function spawnInterval() {
 // ---------- Game state ----------
 const MENU = 0, PLAYING = 1, OVER = 2;
 let state = MENU;
-let score = 0, best = parseInt(localStorage.getItem('fruit-ninja-best') || '0', 10);
+let score = 0, best = parseInt(localStorage.getItem(THEME.bestKey) || '0', 10);
 let lives = 3, elapsed = 0, spawnTimer = 0, endingT = -1;
-let shakeT = 0, flashT = 0;
+let shakeT = 0, flashT = 0, startMsgShown = false;
 
 function updateHUD() {
   scoreEl.textContent = score;
@@ -814,7 +1008,7 @@ function clearEntities() {
 function startGame() {
   clearEntities();
   score = 0; lives = 3; elapsed = 0; spawnTimer = 0.7;
-  comboCount = 0; endingT = -1; flashT = 0; shakeT = 0;
+  comboCount = 0; endingT = -1; flashT = 0; shakeT = 0; startMsgShown = false;
   state = PLAYING;
   menuScreen.classList.add('hidden');
   overScreen.classList.add('hidden');
@@ -827,7 +1021,7 @@ function gameOver() {
   state = OVER;
   play('Game-over', 0.8);
   const isBest = score > best;
-  if (isBest) { best = score; localStorage.setItem('fruit-ninja-best', String(best)); }
+  if (isBest) { best = score; localStorage.setItem(THEME.bestKey, String(best)); }
   $('final-score').textContent = 'Score: ' + score;
   $('new-best').classList.toggle('hidden', !isBest);
   hud.classList.add('hidden');
@@ -848,6 +1042,7 @@ function update(dt) {
       spawnTimer -= dt;
       if (spawnTimer <= 0) { spawnWave(); spawnTimer = spawnInterval(); }
       if (comboCount > 0) { comboTimer -= dt; if (comboTimer <= 0) resolveCombo(); }
+      if (THEME.startMessage && !startMsgShown && elapsed >= 3) { startMsgShown = true; showBanner(THEME.startMessage); }
     }
     for (const e of fruits) {
       e.update(dt);
@@ -897,7 +1092,7 @@ function updateMenu(dt) {
   fruits = fruits.filter(e => !e.dead);
 }
 function launchMenuFruit() {
-  const f = FRUITS[Math.floor(Math.random() * FRUITS.length)];
+  const f = pickItem();
   const e = new Entity(f, false);
   const x = (Math.random() - 0.5) * viewW * 0.8;
   e.setPos(x, -viewH / 2 - 3, (Math.random() - 0.5) * 4);
@@ -928,7 +1123,7 @@ function renderOverlay() {
   for (const s of sparks) {
     const k = 1 - s.t / s.life;
     octx.globalAlpha = k;
-    octx.fillStyle = Math.random() < 0.5 ? '#ffd740' : '#ff6e40';
+    octx.fillStyle = s.milk ? (Math.random() < 0.5 ? '#ffffff' : '#f3ede0') : (Math.random() < 0.5 ? '#ffd740' : '#ff6e40');
     octx.beginPath(); octx.arc(s.x, s.y, 1.5 + k * 2.5, 0, 7); octx.fill();
   }
   octx.globalAlpha = 1;
@@ -1129,29 +1324,33 @@ function drawLeafSprout(ctx, x, y, s) {
 
 function buildLogo() {
   const c = document.getElementById('logo');
+  if (!c) return;
   const ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
 
-  const fruit = glossyWord('Fruit', 210, 4, {
-    colors: ['#7b2fb0', '#e0271f', '#f08200', '#f5b50a', '#3f9b2e'],
-    outlineColor: '#2c1206', outlineW: 0.05
+  const word1 = THEME.logoWords[0]; // Fruit / Sushi
+  const top = glossyWord(word1, 210, 4, {
+    colors: THEME.logoColors, outlineColor: '#2c1206', outlineW: 0.05
   });
-  const ninja = glossyWord('Ninja', 150, 8, {
+  const ninja = glossyWord(THEME.logoWords[1], 150, 8, {
     metallic: true, outlineColor: '#1b2128', outlineW: 0.08, noDrops: false
   });
 
-  // place FRUIT centered upper, NINJA lower-right overlapping
-  const fx = (c.width - fruit.canvas.width) / 2;
+  // place the top word centered upper, NINJA lower-right overlapping
+  const fx = (c.width - top.canvas.width) / 2;
   const fy = 30;
   const nx = (c.width - ninja.canvas.width) / 2 + 120;
   const ny = 300;
   ctx.drawImage(ninja.canvas, nx, ny);
-  ctx.drawImage(fruit.canvas, fx, fy);
+  ctx.drawImage(top.canvas, fx, fy);
 
-  // leaf sprout growing out of the dot of the "i" (4th glyph)
-  const iCenter = fx + fruit.centers[3];
-  const iTop = fy + fruit.baseY - fruit.size * 0.82;
-  drawLeafSprout(ctx, iCenter + 4, iTop, 30);
+  // leaf sprout growing out of the dot of the "i"
+  const iIdx = word1.toLowerCase().indexOf('i');
+  if (iIdx >= 0) {
+    const iCenter = fx + top.centers[iIdx];
+    const iTop = fy + top.baseY - top.size * 0.82;
+    drawLeafSprout(ctx, iCenter + 4, iTop, 30);
+  }
 }
 
 // ---------- Boot ----------
