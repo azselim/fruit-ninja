@@ -16,7 +16,7 @@ Then open the printed URL. Works with mouse and touch.
 
 ### 🍣 Sushi Ninja
 
-There's a sushi-themed mode at **`/sushi/`** (same engine, different theme). Slice the sushi — tuna/cucumber/avocado maki, california roll, ikura gunkan, salmon/tamago/ebi nigiri, plus a rare wasabi bonus — and **don't slice the glass of milk** (it's the "bomb"). The theme is selected by `window.FN_THEME = 'sushi'` set in `sushi/index.html` before the shared `game.js` loads.
+There's a sushi-themed mode at **`/sushi/`** (same engine, different theme). Slice the sushi — tuna/cucumber/avocado maki, california roll, ikura gunkan, salmon/tamago/ebi nigiri, plus a rare wasabi bonus — and **don't slice the jar of peanut butter** (it's the "bomb"). Maki rolls are rendered end-on so you see the spiral cross-section, and slicing one splits it into two half-moons. The theme is selected by `window.FN_THEME = 'sushi'` set in `sushi/index.html` before the shared `game.js` loads.
 
 ## How to play
 

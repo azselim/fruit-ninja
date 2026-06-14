@@ -21,7 +21,7 @@ const THEMES = {
   },
   sushi: {
     comboWord: 'SUSHI', bestKey: 'sushi-ninja-best',
-    hazard: 'milk', hazardFuse: false, startMessage: 'hi bhenchod',
+    hazard: 'peanutbutter', hazardFuse: false, startMessage: 'hi bhenchod',
     logoWords: ['Sushi', 'Ninja'],
     logoColors: ['#e8612e', '#f0a818', '#2f6f3a', '#e23b53', '#1f1f1f']
   }
@@ -360,22 +360,22 @@ function rings(b, s, layers) {
 
 const SUSHI = [
   { // tuna maki roll
-    name: 'tuna-maki', r: 1.7, scale: [1, 0.95, 1], score: 1, juice: '#c0392b', sound: 'Impact-Watermelon', cyl: true,
+    name: 'tuna-maki', r: 1.7, scale: [1, 0.95, 1], score: 1, juice: '#c0392b', sound: 'Impact-Watermelon', cyl: true, endOn: true,
     rind: noriBg,
     flesh(b, s) { rings(b, s, [{ r: 1, c: '#16271c' }, { r: 0.9, c: '#f8f4ec' }]); riceGrains(b, s, 0.9); rings(b, s, [{ r: 0.36, c: '#c0392b' }, { r: 0.16, c: '#e0584a' }]); }
   },
   { // cucumber maki (kappa)
-    name: 'cucumber-maki', r: 1.6, scale: [1, 0.95, 1], score: 1, juice: '#7cc36a', sound: 'Impact-kiwifruit', cyl: true,
+    name: 'cucumber-maki', r: 1.6, scale: [1, 0.95, 1], score: 1, juice: '#7cc36a', sound: 'Impact-kiwifruit', cyl: true, endOn: true,
     rind: noriBg,
     flesh(b, s) { rings(b, s, [{ r: 1, c: '#16271c' }, { r: 0.9, c: '#f8f4ec' }]); riceGrains(b, s, 0.9); rings(b, s, [{ r: 0.34, c: '#3f8f44' }, { r: 0.26, c: '#9ed98a' }, { r: 0.12, c: '#eafbe3' }]); }
   },
   { // avocado maki
-    name: 'avocado-maki', r: 1.6, scale: [1, 0.95, 1], score: 1, juice: '#9cc06a', sound: 'Impact-Plum', cyl: true,
+    name: 'avocado-maki', r: 1.6, scale: [1, 0.95, 1], score: 1, juice: '#9cc06a', sound: 'Impact-Plum', cyl: true, endOn: true,
     rind: noriBg,
     flesh(b, s) { rings(b, s, [{ r: 1, c: '#16271c' }, { r: 0.9, c: '#f8f4ec' }]); riceGrains(b, s, 0.9); rings(b, s, [{ r: 0.36, c: '#8fb85a' }, { r: 0.18, c: '#cfe39a' }]); }
   },
   { // california roll (rice outside, sesame)
-    name: 'california', r: 1.75, scale: [1.05, 0.98, 1.05], score: 1, juice: '#f0894c', sound: 'Impact-Orange', cyl: true,
+    name: 'california', r: 1.75, scale: [1.05, 0.98, 1.05], score: 1, juice: '#f0894c', sound: 'Impact-Orange', cyl: true, endOn: true,
     rind(b, s) { riceBg(b, s, true); },
     flesh(b, s) { rings(b, s, [{ r: 1, c: '#f1ead8' }]); riceGrains(b, s, 1); rings(b, s, [{ r: 0.62, c: '#1a2c20' }, { r: 0.56, c: '#f8f4ec' }, { r: 0.4, c: '#f0894c' }, { r: 0.22, c: '#9cc06a' }]); }
   },
@@ -418,6 +418,16 @@ const TOP_DOME = new THREE.SphereGeometry(1, 36, 18, 0, Math.PI * 2, 0, Math.PI 
 const BOT_DOME = new THREE.SphereGeometry(1, 36, 18, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
 const CAP = new THREE.CircleGeometry(1, 36);
 const CYL = new THREE.CylinderGeometry(1, 1, 1, 30); // unit roll (axis Y), groups: side/top/bottom
+
+// End-on maki roll: cylinder turned so the circular flesh faces the camera and
+// the nori wraps the thin rim. Slicing it yields two half-moons (below), not balls.
+const MAKI_CYL = new THREE.CylinderGeometry(1, 1, 1, 30).rotateX(Math.PI / 2); // axis -> Z
+// Half-moon: solid hump on +Y, flat cut face on the y=0 plane, caps face ±Z.
+const MAKI_HALF = new THREE.CylinderGeometry(1, 1, 1, 24, 1, false, 0, Math.PI)
+  .rotateX(-Math.PI / 2).rotateZ(Math.PI / 2);
+// Flat rectangular cut face that closes the open diameter of the half-moon (normal -Y).
+const MAKI_HALF_CAP = new THREE.PlaneGeometry(2, 1).rotateX(Math.PI / 2);
+const MAKI_THICK = 0.62; // roll thickness along the view axis (Z), in unit-radius terms
 
 // build & cache materials per item (fruit or sushi)
 for (const f of ITEMS) {
@@ -550,17 +560,53 @@ function addTop(f, g) {
 function makeWhole(f) {
   const g = new THREE.Group();
   let m;
-  if (f.cyl) m = new THREE.Mesh(CYL, [f.rindMat, f.fleshMat, f.fleshMat]); // side, top, bottom
-  else m = new THREE.Mesh(UNIT_SPHERE, f.rindMat);
-  m.scale.set(f.scale[0], f.scale[1], f.scale[2]);
+  if (f.endOn) { // end-on roll: flesh cross-section faces the camera, nori on the rim
+    m = new THREE.Mesh(MAKI_CYL, [f.rindMat, f.fleshMat, f.fleshMat]); // side, +Z cap, -Z cap
+    m.scale.set(f.scale[0], f.scale[1], MAKI_THICK);
+  } else if (f.cyl) { // upright roll (e.g. ikura gunkan) — flesh on the top/bottom caps
+    m = new THREE.Mesh(CYL, [f.rindMat, f.fleshMat, f.fleshMat]); // side, top, bottom
+    m.scale.set(f.scale[0], f.scale[1], f.scale[2]);
+  } else {
+    m = new THREE.Mesh(UNIT_SPHERE, f.rindMat);
+    m.scale.set(f.scale[0], f.scale[1], f.scale[2]);
+  }
   g.add(m);
   addTop(f, g);
   g.scale.setScalar(f.r);
   return g;
 }
 
+// Half-moon slice of an end-on roll: curved nori rim + two flesh half-disks (±Z)
+// + a flat flesh cut face. Solid hump on +Y so it reuses the dome separation logic.
+function makeHalfMaki(f, top) {
+  const g = new THREE.Group();
+  const inner = new THREE.Group();
+  inner.add(new THREE.Mesh(MAKI_HALF, [f.rindMat, f.fleshMat, f.fleshMat]));
+  inner.add(new THREE.Mesh(MAKI_HALF_CAP, f.fleshMat));
+  inner.scale.set(f.scale[0], f.scale[1], MAKI_THICK);
+  if (!top) inner.rotation.z = Math.PI; // mirror to the -Y half
+  g.add(inner);
+  g.scale.setScalar(f.r);
+  return g;
+}
+
+// Half of an upright roll: a short barrel showing flesh on both circular ends
+// (the original cap and the freshly cut face), nori around the side.
+function makeHalfBarrel(f, top) {
+  const g = new THREE.Group();
+  const m = new THREE.Mesh(CYL, [f.rindMat, f.fleshMat, f.fleshMat]);
+  m.scale.set(f.scale[0], f.scale[1] * 0.5, f.scale[2]);
+  m.position.y = f.scale[1] * 0.25 * (top ? 1 : -1);
+  g.add(m);
+  if (top) addTop(f, g);
+  g.scale.setScalar(f.r);
+  return g;
+}
+
 // a half = dome (rind) + flat cap (flesh); the leafy top rides along on the top half
 function makeHalf(f, top) {
+  if (f.endOn) return makeHalfMaki(f, top);
+  if (f.cyl) return makeHalfBarrel(f, top);
   const g = new THREE.Group();
   const dome = new THREE.Mesh(top ? TOP_DOME : BOT_DOME, f.rindMat);
   dome.scale.set(f.scale[0], f.scale[1], f.scale[2]);
@@ -698,29 +744,56 @@ function makeBomb() {
   return g;
 }
 
-// ---- Milk glass hazard (sushi theme) ----
-const GLASS_GEO = new THREE.CylinderGeometry(0.62, 0.5, 1.15, 26, 1, true); // open tube
-const MILK_GEO = new THREE.CylinderGeometry(0.58, 0.47, 0.92, 26);
-const GLASS_BASE_GEO = new THREE.CylinderGeometry(0.5, 0.52, 0.08, 26);
-const glassMat = new THREE.MeshPhongMaterial({ color: 0xdfeeff, shininess: 110, specular: 0xffffff, transparent: true, opacity: 0.34, side: THREE.DoubleSide });
-const milkMat = new THREE.MeshPhongMaterial({ color: 0xfffdf7, shininess: 22, specular: 0x999999 });
-const HAZARD_R = THEME.hazard === 'milk' ? 1.5 : 1.7;
+// ---- Peanut butter jar hazard (sushi theme) ----
+const PB_JAR_GEO = new THREE.CylinderGeometry(0.7, 0.66, 1.2, 30, 1, true); // clear glass wall
+const PB_FILL_GEO = new THREE.CylinderGeometry(0.66, 0.62, 1.04, 30);        // peanut butter inside
+const PB_BASE_GEO = new THREE.CircleGeometry(0.7, 30);                       // jar bottom
+const PB_LID_GEO = new THREE.CylinderGeometry(0.74, 0.72, 0.36, 30);         // screw-top lid
+const PB_LABEL_GEO = new THREE.CylinderGeometry(0.705, 0.69, 0.8, 30, 1, true); // wrap-around label
+function pbLabelCanvas() {
+  const c = makeCanvas(256), b = c.getContext('2d');
+  b.fillStyle = '#f3e2bf'; b.fillRect(0, 0, 256, 256);
+  b.fillStyle = '#b9472a'; b.fillRect(0, 0, 256, 24); b.fillRect(0, 232, 256, 24);
+  // peanut emblem
+  b.fillStyle = '#c98a3c'; b.strokeStyle = '#8a5a22'; b.lineWidth = 3;
+  for (const [x, y] of [[110, 92], [150, 108]]) {
+    b.beginPath(); b.ellipse(x, y, 26, 18, -0.4, 0, 7); b.fill(); b.stroke();
+  }
+  // brown name band
+  b.fillStyle = '#5a3214'; b.fillRect(0, 150, 256, 58);
+  b.fillStyle = '#f3e2bf'; b.textAlign = 'center'; b.textBaseline = 'middle';
+  b.font = 'bold 28px Georgia, serif';
+  b.fillText('PEANUT BUTTER', 128, 180);
+  return c;
+}
+const pbGlassMat = new THREE.MeshPhongMaterial({ color: 0xeef3e8, shininess: 120, specular: 0xffffff, transparent: true, opacity: 0.16, side: THREE.DoubleSide });
+const pbFillMat = new THREE.MeshPhongMaterial({ color: 0xa86c2c, shininess: 12, specular: 0x4a3010 });
+const pbLidMat = new THREE.MeshPhongMaterial({ color: 0xc0392b, shininess: 55, specular: 0x661a14 });
+const pbLabelMat = new THREE.MeshPhongMaterial({ map: texFromCanvas(pbLabelCanvas()), shininess: 14 });
+const HAZARD_R = THEME.hazard === 'bomb' ? 1.7 : 1.6;
 
-function makeMilk() {
+function makePeanutButter() {
   const g = new THREE.Group();
-  const milk = new THREE.Mesh(MILK_GEO, milkMat);
-  milk.position.y = -0.08;
-  g.add(milk);
-  const glass = new THREE.Mesh(GLASS_GEO, glassMat);
+  const fill = new THREE.Mesh(PB_FILL_GEO, pbFillMat);
+  fill.position.y = -0.02;
+  g.add(fill);
+  const label = new THREE.Mesh(PB_LABEL_GEO, pbLabelMat);
+  label.position.y = -0.04;
+  g.add(label);
+  const glass = new THREE.Mesh(PB_JAR_GEO, pbGlassMat);
   g.add(glass);
-  const base = new THREE.Mesh(GLASS_BASE_GEO, glassMat);
-  base.position.y = -0.62;
+  const base = new THREE.Mesh(PB_BASE_GEO, pbGlassMat);
+  base.rotation.x = -Math.PI / 2;
+  base.position.y = -0.6;
   g.add(base);
-  g.scale.setScalar(2.1); // match the visual scale of fruit/bombs
+  const lid = new THREE.Mesh(PB_LID_GEO, pbLidMat);
+  lid.position.y = 0.72;
+  g.add(lid);
+  g.scale.setScalar(2.0); // match the visual scale of fruit/bombs
   return g;
 }
 
-function makeHazard() { return THEME.hazard === 'milk' ? makeMilk() : makeBomb(); }
+function makeHazard() { return THEME.hazard === 'bomb' ? makeBomb() : makePeanutButter(); }
 
 // ---------- Pieces (halves + juice droplets) ----------
 class Piece {
@@ -886,17 +959,17 @@ function sliceFruit(e, screenAngle, sp) {
 function hitBomb(e) {
   e.dead = true; e.sliced = true;
   e.remove();
-  const milk = THEME.hazard === 'milk';
+  const splat = THEME.hazard !== 'bomb';
   const sp = worldToScreen(e.obj.position);
-  if (milk) {
+  if (splat) {
     play('Splatter-Medium-1', 1); play('Bomb-explode', 0.4);
     flashT = 0.22; shakeT = 0.5; endingT = 1.2;
-    // white milk spray + droplets
-    for (let i = 0; i < 50; i++) sparks.push({ x: sp.x, y: sp.y, vx: (Math.random() - .5) * 520, vy: (Math.random() - .5) * 520, t: 0, life: 0.4 + Math.random() * 0.5, milk: true });
-    spawnJuice(e.obj.position, 0xfffdf7, 22);
-    addSplat(sp.x, sp.y, '#fbf7ee');
-    addSplat(sp.x, sp.y, '#fffdf7');
-    addPopup(sp.x, sp.y - 30, '❌ lactose', '#fff');
+    // sticky peanut-butter spray + droplets
+    for (let i = 0; i < 50; i++) sparks.push({ x: sp.x, y: sp.y, vx: (Math.random() - .5) * 480, vy: (Math.random() - .5) * 480, t: 0, life: 0.4 + Math.random() * 0.5, pb: true });
+    spawnJuice(e.obj.position, 0xa86c2c, 22);
+    addSplat(sp.x, sp.y, '#7a4a1e');
+    addSplat(sp.x, sp.y, '#a86c2c');
+    addPopup(sp.x, sp.y - 30, '❌ allergy', '#ffe9c4');
   } else {
     play('Bomb-explode', 1);
     flashT = 0.3; shakeT = 0.6; endingT = 1.2;
@@ -1123,7 +1196,7 @@ function renderOverlay() {
   for (const s of sparks) {
     const k = 1 - s.t / s.life;
     octx.globalAlpha = k;
-    octx.fillStyle = s.milk ? (Math.random() < 0.5 ? '#ffffff' : '#f3ede0') : (Math.random() < 0.5 ? '#ffd740' : '#ff6e40');
+    octx.fillStyle = s.pb ? (Math.random() < 0.5 ? '#c98a3c' : '#7a4a1e') : (Math.random() < 0.5 ? '#ffd740' : '#ff6e40');
     octx.beginPath(); octx.arc(s.x, s.y, 1.5 + k * 2.5, 0, 7); octx.fill();
   }
   octx.globalAlpha = 1;
