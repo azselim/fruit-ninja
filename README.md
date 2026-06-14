@@ -1,10 +1,10 @@
-# 🍉 Fruit Ninja
+# 🍉 Fruit Ninja 3D
 
-A complete Fruit Ninja web game built with vanilla HTML, CSS, and JavaScript — no frameworks, no build step, no external assets. All fruit artwork is drawn procedurally on a `<canvas>`, and every sound effect is synthesized live with the Web Audio API.
+A 3D Fruit Ninja game for the web, built with **Three.js** and vanilla JavaScript. Fruit are real 3D meshes that get sliced into tumbling halves with exposed flesh cross-sections, juice sprays in 3D and splatters the "lens," and the game uses the **authentic Fruit Ninja sound effects**.
 
 ## Play
 
-Open `index.html` in any modern browser, or serve the folder:
+Because it loads ES modules and audio, serve the folder over HTTP (don't open the file directly):
 
 ```bash
 npx serve .
@@ -12,26 +12,39 @@ npx serve .
 python3 -m http.server 8000
 ```
 
-Works with mouse and touch (mobile friendly).
+Then open the printed URL. Works with mouse and touch.
 
 ## How to play
 
-- **Swipe** (click-drag or touch-drag) across fruit to slice it.
-- **Don't slice bombs** 💣 — one hit ends the game instantly.
-- **Don't drop fruit** — letting 3 fruits fall unsliced ends the game.
-- Slice **3+ fruits in a single swipe** for a combo bonus.
-- Random **critical hits** award +5 bonus points.
-- Your **best score** is saved locally between sessions.
+- **Drag** (mouse or finger) to swing your blade through the fruit.
+- **Don't slice bombs** 💣 — one hit ends the game.
+- **Don't drop fruit** — letting 3 fruits fall ends the game.
+- Slice **3+ fruits in one swipe** for a combo bonus.
+- Random **critical hits** award +5.
+- Best score is saved locally.
 
 ## Features
 
-- Realistic projectile physics with gravity, spin, and screen-size scaling
-- Fruits split into two halves that tumble apart along the slice angle
-- Juice splatter particles and fading splat stains on the cutting board
-- 6 fruit types (watermelon, orange, apple, lemon, kiwi, peach), each with unique whole and cut-face artwork
-- Bombs with burning fuses, sparks, screen shake, and an explosion flash
-- Glowing blade trail that follows your swipe
-- Combo, critical-hit, and score popups
-- Difficulty ramps up over time (faster waves, more fruit, more bombs)
-- Synthesized sound effects: swoosh, splat, throw, fuse, explosion, combo jingle, game over
-- Menu and game-over screens, lives HUD, persistent best score (`localStorage`)
+- **Real 3D** rendering with Three.js: perspective camera, multi-light setup (key/warm/rim), glossy Phong-shaded fruit
+- 8 fully 3D fruits — watermelon, orange, apple, plum, kiwi, coconut, strawberry (with leaf), pineapple (with crown) — each with procedurally generated rind **and** flesh textures
+- Fruit split into **two 3D half-meshes** showing the cut flesh face, flying apart along the slice direction with tumble spin
+- 3D juice droplets + juice splatter decals on the screen, fading over time
+- 3D bombs with cap, fuse, and live spark particles; slicing one triggers an explosion, screen flash, and camera shake
+- Glowing blade trail rendered on a 2D overlay
+- **Authentic Fruit Ninja audio**: per-fruit slice impacts, sword swipes, splatter, throws, bomb fuse/explosion, combo stingers, game-start/over jingles, and UI sounds
+- Combo banners, critical-hit and score popups, lives HUD, persistent best score
+- Difficulty ramps over time (faster waves, more fruit, more bombs)
+
+## Project layout
+
+```
+index.html          markup + screens/HUD
+style.css           Fruit Ninja-style UI and logo
+game.js             Three.js game (ES module)
+lib/                vendored Three.js build
+assets/sounds/      authentic .wav sound effects
+```
+
+## Credits
+
+Sound effects are the original Fruit Ninja sound assets, used here for a personal/educational project. Three.js is MIT licensed.
