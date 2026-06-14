@@ -1,6 +1,6 @@
 /* ============================================================
-   Fruit Ninja 3D — Three.js
-   Real 3D fruit meshes sliced into halves, authentic sounds.
+   Fruit Ninja — Three.js
+   Fruit meshes sliced into halves, authentic sounds.
    ============================================================ */
 
 import * as THREE from './lib/three.module.js';
@@ -487,7 +487,7 @@ function makeBomb() {
   return g;
 }
 
-// ---------- Pieces (halves + 3D juice droplets) ----------
+// ---------- Pieces (halves + juice droplets) ----------
 class Piece {
   constructor(obj, vel, spin, life = 4) {
     this.obj = obj; this.vel = vel; this.spin = spin;
@@ -719,7 +719,7 @@ function spawnInterval() {
 // ---------- Game state ----------
 const MENU = 0, PLAYING = 1, OVER = 2;
 let state = MENU;
-let score = 0, best = parseInt(localStorage.getItem('fn3d-best') || '0', 10);
+let score = 0, best = parseInt(localStorage.getItem('fruit-ninja-best') || '0', 10);
 let lives = 3, elapsed = 0, spawnTimer = 0, endingT = -1;
 let shakeT = 0, flashT = 0;
 
@@ -760,7 +760,7 @@ function gameOver() {
   state = OVER;
   play('Game-over', 0.8);
   const isBest = score > best;
-  if (isBest) { best = score; localStorage.setItem('fn3d-best', String(best)); }
+  if (isBest) { best = score; localStorage.setItem('fruit-ninja-best', String(best)); }
   $('final-score').textContent = 'Score: ' + score;
   $('new-best').classList.toggle('hidden', !isBest);
   hud.classList.add('hidden');
@@ -921,7 +921,7 @@ function loop(t) {
   lastT = t;
   update(dt);
 
-  // camera shake on the 3D view too
+  // camera shake on the rendered view too
   if (shakeT > 0) {
     camera.position.x = (Math.random() - .5) * shakeT * 1.5;
     camera.position.y = (Math.random() - .5) * shakeT * 1.5;

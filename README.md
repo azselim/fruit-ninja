@@ -1,6 +1,6 @@
-# 🍉 Fruit Ninja 3D
+# 🍉 Fruit Ninja
 
-A 3D Fruit Ninja game for the web, built with **Three.js** and vanilla JavaScript. Fruit are real 3D meshes that get sliced into tumbling halves with exposed flesh cross-sections, juice sprays in 3D and splatters the "lens," and the game uses the **authentic Fruit Ninja sound effects**.
+A Fruit Ninja game for the web, built with **Three.js** and vanilla JavaScript. Fruit are rendered meshes that get sliced into tumbling halves with exposed flesh cross-sections, juice sprays out and splatters the "lens," and the game uses the **authentic Fruit Ninja sound effects**.
 
 ## Play
 
@@ -25,11 +25,11 @@ Then open the printed URL. Works with mouse and touch.
 
 ## Features
 
-- **Real 3D** rendering with Three.js: perspective camera, multi-light setup (key/warm/rim), glossy Phong-shaded fruit
-- 8 fully 3D fruits — watermelon, orange, apple, plum, kiwi, coconut, strawberry (with leaf), pineapple (with crown) — each with procedurally generated rind **and** flesh textures
-- Fruit split into **two 3D half-meshes** showing the cut flesh face, flying apart along the slice direction with tumble spin
-- 3D juice droplets + juice splatter decals on the screen, fading over time
-- 3D bombs with cap, fuse, and live spark particles; slicing one triggers an explosion, screen flash, and camera shake
+- Rendering with Three.js: perspective camera, multi-light setup (key/warm/rim), glossy Phong-shaded fruit
+- 8 fruits — watermelon, orange, apple, plum, kiwi, coconut, strawberry (with leaf), pineapple (with crown) — each with procedurally generated rind **and** flesh textures
+- Fruit split into **two half-meshes** showing the cut flesh face, flying apart along the slice direction with tumble spin
+- Juice droplets + juice splatter decals on the screen, fading over time
+- Bombs with cap, fuse, and live spark particles; slicing one triggers an explosion, screen flash, and camera shake
 - Glowing blade trail rendered on a 2D overlay
 - **Authentic Fruit Ninja audio**: per-fruit slice impacts, sword swipes, splatter, throws, bomb fuse/explosion, combo stingers, game-start/over jingles, and UI sounds
 - Combo banners, critical-hit and score popups, lives HUD, persistent best score
