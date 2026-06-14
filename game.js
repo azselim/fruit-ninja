@@ -18,10 +18,20 @@ const menuScreen = $('menu-screen');
 const overScreen = $('gameover-screen');
 const loadingEl = $('loading');
 
-let W = window.innerWidth, H = window.innerHeight, DPR = Math.min(devicePixelRatio || 1, 2);
+// Mobile / low-power detection — drives the quality trade-offs below.
+const IS_MOBILE = matchMedia('(pointer: coarse)').matches ||
+  /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(navigator.userAgent);
+const MAX_DPR = IS_MOBILE ? 1.5 : 2;
+let qualityScale = 1; // lowered at runtime if the device can't keep up
+const JUICE_N = IS_MOBILE ? 9 : 16;     // juice droplets per slice
+const MAX_PIECES = IS_MOBILE ? 90 : 200; // cap live halves/droplets
+
+let W = window.innerWidth, H = window.innerHeight;
+function effectiveDPR() { return Math.min(devicePixelRatio || 1, MAX_DPR) * qualityScale; }
+let DPR = effectiveDPR();
 
 // ---------- Three.js core ----------
-const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, alpha: false });
+const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: !IS_MOBILE, alpha: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(DPR);
 renderer.shadowMap.enabled = false;
 
@@ -39,16 +49,20 @@ function computeView() {
 }
 
 // ---------- Lighting ----------
-scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-const key = new THREE.DirectionalLight(0xfff2dd, 1.15);
+// On mobile, fewer lights = far cheaper per-fragment shading. Keep ambient + key,
+// and fold the warm fill into a slightly brighter ambient.
+scene.add(new THREE.AmbientLight(0xffffff, IS_MOBILE ? 0.72 : 0.55));
+const key = new THREE.DirectionalLight(0xfff2dd, IS_MOBILE ? 1.25 : 1.15);
 key.position.set(-6, 12, 14);
 scene.add(key);
-const warm = new THREE.PointLight(0xffaa55, 0.5, 120);
-warm.position.set(10, -6, 18);
-scene.add(warm);
-const rim = new THREE.DirectionalLight(0x88aaff, 0.35);
-rim.position.set(8, -10, -6);
-scene.add(rim);
+if (!IS_MOBILE) {
+  const warm = new THREE.PointLight(0xffaa55, 0.5, 120);
+  warm.position.set(10, -6, 18);
+  scene.add(warm);
+  const rim = new THREE.DirectionalLight(0x88aaff, 0.35);
+  rim.position.set(8, -10, -6);
+  scene.add(rim);
+}
 
 // ---------- Texture helpers (procedural canvas textures) ----------
 function makeCanvas(size = 256) {
@@ -307,16 +321,43 @@ const bombMat = new THREE.MeshPhongMaterial({ color: 0x161616, shininess: 90, sp
 const capMat = new THREE.MeshPhongMaterial({ color: 0x2a2a2a, shininess: 60 });
 
 // ---- Leafy tops (pineapple crown, strawberry calyx) ----
+// Each leafy top is baked ONCE into a single merged geometry with vertex colors,
+// so every fruit/half reuses one geometry + one material = a single draw call,
+// and slicing a pineapple allocates nothing.
 const CROWN_GREENS = [0x2f7a37, 0x3c9a44, 0x4eb155, 0x2a6b30, 0x57bf5e];
-const leafGeo = new THREE.ConeGeometry(0.17, 1, 4); // unit-height blade; scaled per leaf
-function makeBlade(color, len, flat = 0.32) {
-  const m = new THREE.Mesh(leafGeo, new THREE.MeshPhongMaterial({ color, shininess: 16, flatShading: true }));
-  m.scale.set(1, len, flat); // stretch to length, flatten into a blade
-  return m;
+const leafGeo = new THREE.ConeGeometry(0.17, 1, 4).toNonIndexed(); // unit-height blade
+const leafMat = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 16, flatShading: true });
+
+// blade spec: { color, len, flat, pos:[x,y,z], rotX, rotY, rotZ }
+function bakeLeaves(specs) {
+  const positions = [], normals = [], colors = [];
+  const m = new THREE.Matrix4(), nmat = new THREE.Matrix3();
+  const q = new THREE.Quaternion(), eul = new THREE.Euler();
+  const v = new THREE.Vector3(), n = new THREE.Vector3(), col = new THREE.Color();
+  const posAttr = leafGeo.attributes.position, norAttr = leafGeo.attributes.normal;
+  for (const s of specs) {
+    eul.set(s.rotX || 0, s.rotY || 0, s.rotZ || 0, 'XYZ');
+    q.setFromEuler(eul);
+    m.compose(new THREE.Vector3(s.pos[0], s.pos[1], s.pos[2]), q, new THREE.Vector3(1, s.len, s.flat));
+    nmat.getNormalMatrix(m);
+    col.set(s.color);
+    for (let i = 0; i < posAttr.count; i++) {
+      v.fromBufferAttribute(posAttr, i).applyMatrix4(m);
+      n.fromBufferAttribute(norAttr, i).applyMatrix3(nmat).normalize();
+      positions.push(v.x, v.y, v.z);
+      normals.push(n.x, n.y, n.z);
+      colors.push(col.r, col.g, col.b);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  return g;
 }
-// A spiky pineapple crown: several rings of leaves tilting progressively upright + a center spike
-function makeCrown() {
-  const g = new THREE.Group();
+
+function crownSpecs() {
+  const specs = [];
   const rings = [
     { count: 7, r: 0.46, len: 0.85, tilt: 1.05 },
     { count: 6, r: 0.30, len: 1.20, tilt: 0.7 },
@@ -326,32 +367,32 @@ function makeCrown() {
     for (let i = 0; i < ring.count; i++) {
       const a = (i / ring.count) * Math.PI * 2 + ri * 0.45;
       const len = ring.len * (0.85 + Math.random() * 0.3);
-      const blade = makeBlade(CROWN_GREENS[(i + ri) % CROWN_GREENS.length], len);
-      blade.position.set(Math.cos(a) * ring.r, len * 0.42, Math.sin(a) * ring.r);
-      blade.rotation.x = Math.sin(a) * ring.tilt;
-      blade.rotation.z = -Math.cos(a) * ring.tilt;
-      blade.rotation.y = (Math.random() - 0.5) * 0.4;
-      g.add(blade);
+      specs.push({
+        color: CROWN_GREENS[(i + ri) % CROWN_GREENS.length], len, flat: 0.32,
+        pos: [Math.cos(a) * ring.r, len * 0.42, Math.sin(a) * ring.r],
+        rotX: Math.sin(a) * ring.tilt, rotZ: -Math.cos(a) * ring.tilt, rotY: (Math.random() - 0.5) * 0.4
+      });
     }
   });
-  const spike = makeBlade(CROWN_GREENS[1], 1.8);
-  spike.position.y = 0.78;
-  g.add(spike);
-  return g;
+  specs.push({ color: CROWN_GREENS[1], len: 1.8, flat: 0.32, pos: [0, 0.78, 0] });
+  return specs;
 }
-// A small strawberry calyx (star of little leaves)
-function makeCalyx() {
-  const g = new THREE.Group();
+function calyxSpecs() {
+  const specs = [];
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2;
-    const leaf = makeBlade(0x3fa14a, 0.5, 0.45);
-    leaf.position.set(Math.cos(a) * 0.16, 0.06, Math.sin(a) * 0.16);
-    leaf.rotation.x = Math.sin(a) * 1.15;
-    leaf.rotation.z = -Math.cos(a) * 1.15;
-    g.add(leaf);
+    specs.push({
+      color: 0x3fa14a, len: 0.5, flat: 0.45,
+      pos: [Math.cos(a) * 0.16, 0.06, Math.sin(a) * 0.16],
+      rotX: Math.sin(a) * 1.15, rotZ: -Math.cos(a) * 1.15
+    });
   }
-  return g;
+  return specs;
 }
+const CROWN_GEO = bakeLeaves(crownSpecs());
+const CALYX_GEO = bakeLeaves(calyxSpecs());
+function makeCrown() { return new THREE.Mesh(CROWN_GEO, leafMat); }
+function makeCalyx() { return new THREE.Mesh(CALYX_GEO, leafMat); }
 function addTop(f, g) {
   if (f.crown) { const c = makeCrown(); c.position.y = f.scale[1] * 0.94; c.scale.setScalar(0.95); g.add(c); }
   if (f.berry) { const c = makeCalyx(); c.position.y = f.scale[1] * 0.92; g.add(c); }
@@ -393,37 +434,49 @@ const SOUND_NAMES = [
   'combo-1', 'combo-2', 'combo-3', 'combo-4', 'combo-5',
   'Game-start', 'Game-over', 'ui-button-push', 'Next-screen-button', 'extra-life'
 ];
-const sounds = {};
-let soundsReady = 0;
-function loadSounds(done) {
-  let total = SOUND_NAMES.length;
-  SOUND_NAMES.forEach(name => {
-    const pool = [];
-    const POOL = 4;
-    let counted = false;
-    for (let i = 0; i < POOL; i++) {
-      const a = new Audio(`assets/sounds/${name}.wav`);
-      a.preload = 'auto';
-      if (!counted) {
-        counted = true;
-        a.addEventListener('canplaythrough', () => { soundsReady++; if (soundsReady >= total) done(); }, { once: true });
-        a.addEventListener('error', () => { soundsReady++; if (soundsReady >= total) done(); }, { once: true });
-      }
-      pool.push(a);
-    }
-    sounds[name] = { pool, idx: 0 };
-  });
-  // safety: don't block forever
-  setTimeout(() => { if (soundsReady < total) done(); }, 4000);
+// Web Audio: decode each clip once into a buffer and fire cheap one-shot sources.
+// Far lighter on mobile than a pool of 100+ HTMLAudioElements.
+let actx = null, masterGain = null, muted = false;
+const buffers = {};
+
+function initAudioContext() {
+  if (actx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  actx = new AC();
+  masterGain = actx.createGain();
+  masterGain.gain.value = 0.9;
+  masterGain.connect(actx.destination);
 }
-let muted = false;
+function resumeAudio() { if (actx && actx.state === 'suspended') actx.resume(); }
+
+function loadSounds(done) {
+  initAudioContext();
+  if (!actx) { done(); return; }
+  let total = SOUND_NAMES.length, loaded = 0, finished = false;
+  const finish = () => { if (!finished) { finished = true; done(); } };
+  const tick = () => { if (++loaded >= total) finish(); };
+  SOUND_NAMES.forEach(name => {
+    fetch(`assets/sounds/${name}.wav`)
+      .then(r => r.arrayBuffer())
+      .then(buf => actx.decodeAudioData(buf))
+      .then(b => { buffers[name] = b; })
+      .catch(() => {})
+      .finally(tick);
+  });
+  setTimeout(finish, 6000); // never block boot on audio
+}
+
 function play(name, vol = 1) {
-  if (muted) return;
-  const s = sounds[name];
-  if (!s) return;
-  const a = s.pool[s.idx];
-  s.idx = (s.idx + 1) % s.pool.length;
-  try { a.currentTime = 0; a.volume = vol; a.play().catch(() => {}); } catch (e) {}
+  if (muted || !actx) return;
+  const b = buffers[name];
+  if (!b) return;
+  const src = actx.createBufferSource();
+  src.buffer = b;
+  const g = actx.createGain();
+  g.gain.value = vol;
+  src.connect(g).connect(masterGain);
+  try { src.start(); } catch (e) {}
 }
 function playSwipe() { play('Sword-swipe-' + (1 + Math.floor(Math.random() * 5)), 0.5); }
 function splatterSound() {
@@ -468,19 +521,26 @@ class Entity {
   remove() { scene.remove(this.obj); }
 }
 
+// cached bomb part geometries/materials (built once, shared by every bomb)
+const BOMB_CAP_GEO = new THREE.CylinderGeometry(0.5, 0.6, 0.5, 12);
+const BOMB_FUSE_GEO = new THREE.CylinderGeometry(0.12, 0.12, 1, 8);
+const BOMB_TIP_GEO = new THREE.SphereGeometry(0.22, 8, 8);
+const fuseMat = new THREE.MeshPhongMaterial({ color: 0x9c7b4a });
+const tipMat = new THREE.MeshBasicMaterial({ color: 0xffd23f });
+
 function makeBomb() {
   const g = new THREE.Group();
   const body = new THREE.Mesh(UNIT_SPHERE, bombMat);
   body.scale.setScalar(1.7);
   g.add(body);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.5, 12), capMat);
+  const cap = new THREE.Mesh(BOMB_CAP_GEO, capMat);
   cap.position.y = 1.7;
   g.add(cap);
-  const fuse = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1, 8), new THREE.MeshPhongMaterial({ color: 0x9c7b4a }));
+  const fuse = new THREE.Mesh(BOMB_FUSE_GEO, fuseMat);
   fuse.position.set(0.15, 2.4, 0);
   fuse.rotation.z = -0.5;
   g.add(fuse);
-  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffd23f }));
+  const tip = new THREE.Mesh(BOMB_TIP_GEO, tipMat);
   tip.position.set(0.4, 2.9, 0);
   g.add(tip);
   g.userData.tip = tip;
@@ -507,8 +567,12 @@ class Piece {
 }
 
 const dropGeo = new THREE.SphereGeometry(0.18, 6, 6);
+const juiceMats = {}; // color -> shared MeshBasicMaterial
+function juiceMat(color) {
+  return juiceMats[color] || (juiceMats[color] = new THREE.MeshBasicMaterial({ color }));
+}
 function spawnJuice(pos, color, n) {
-  const mat = new THREE.MeshBasicMaterial({ color });
+  const mat = juiceMat(color);
   for (let i = 0; i < n; i++) {
     const m = new THREE.Mesh(dropGeo, mat);
     m.position.copy(pos);
@@ -518,6 +582,8 @@ function spawnJuice(pos, color, n) {
     const vel = new THREE.Vector3(Math.cos(a) * Math.cos(e), Math.sin(e) + 0.4, Math.sin(a) * Math.cos(e)).multiplyScalar(sp);
     pieces.push(new Piece(m, vel, new THREE.Vector3(), 1.2));
   }
+  // keep the live-piece count bounded so big combos can't tank the framerate
+  while (pieces.length > MAX_PIECES) { const p = pieces.shift(); p.remove(); }
 }
 
 // 2D sparks for bomb fuse / explosion (overlay)
@@ -544,6 +610,7 @@ function pointerPos(e) {
   return { x: e.clientX, y: e.clientY };
 }
 function onDown(e) {
+  resumeAudio();
   pointerDown = true;
   lastPointer = pointerPos(e);
   trail.length = 0;
@@ -623,7 +690,7 @@ function sliceFruit(e, screenAngle, sp) {
     pieces.push(new Piece(half, vel, spin, 4));
   }
 
-  spawnJuice(e.obj.position, new THREE.Color(f.juice).getHex(), 16);
+  spawnJuice(e.obj.position, new THREE.Color(f.juice).getHex(), JUICE_N);
   addSplat(sp.x, sp.y, f.juice);
   play(f.sound, 0.7);
   splatterSound();
@@ -767,8 +834,8 @@ function gameOver() {
   overScreen.classList.remove('hidden');
 }
 
-$('play-btn').addEventListener('click', () => { play('ui-button-push', 0.6); startGame(); });
-$('replay-btn').addEventListener('click', () => { play('ui-button-push', 0.6); startGame(); });
+$('play-btn').addEventListener('click', () => { resumeAudio(); play('ui-button-push', 0.6); startGame(); });
+$('replay-btn').addEventListener('click', () => { resumeAudio(); play('ui-button-push', 0.6); startGame(); });
 
 // ---------- Update ----------
 function update(dt) {
@@ -841,7 +908,8 @@ function launchMenuFruit() {
 
 // ---------- Render overlay ----------
 function renderOverlay() {
-  octx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const oDpr = Math.min(DPR, 1.5);
+  octx.setTransform(oDpr, 0, 0, oDpr, 0, 0);
   octx.clearRect(0, 0, W, H);
 
   let sx = 0, sy = 0;
@@ -902,17 +970,38 @@ function drawBlade() {
 
 // ---------- Resize ----------
 function resize() {
-  W = window.innerWidth; H = window.innerHeight; DPR = Math.min(devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight; DPR = effectiveDPR();
   renderer.setPixelRatio(DPR);
   renderer.setSize(W, H, false);
   camera.aspect = W / H;
   camera.updateProjectionMatrix();
   computeView();
   layoutBackground();
-  overlay.width = W * DPR; overlay.height = H * DPR;
+  // overlay (blade/juice/popups) is cheap line/fill work — keep it at <=1.5x to save fill cost
+  const oDpr = Math.min(DPR, 1.5);
+  overlay.width = Math.round(W * oDpr); overlay.height = Math.round(H * oDpr);
   overlay.style.width = W + 'px'; overlay.style.height = H + 'px';
+  octx.setTransform(oDpr, 0, 0, oDpr, 0, 0);
 }
 window.addEventListener('resize', resize);
+
+// Apply a new quality scale at runtime (used by the adaptive monitor).
+// resize() reads effectiveDPR(), which already folds in qualityScale, and keeps
+// the renderer + overlay in sync.
+function applyQuality() { resize(); }
+
+// ---------- Adaptive quality: drop resolution if the device can't hold ~50fps ----------
+let qWin = 0, qFrames = 0;
+function monitorQuality(dt) {
+  qWin += dt; qFrames++;
+  if (qWin < 2) return;            // sample over 2s windows
+  const fps = qFrames / qWin;
+  qWin = 0; qFrames = 0;
+  if (fps < 50 && qualityScale > 0.6) {
+    qualityScale = Math.max(0.6, qualityScale - 0.18);
+    applyQuality();
+  }
+}
 
 // ---------- Main loop ----------
 let lastT = performance.now();
@@ -920,6 +1009,7 @@ function loop(t) {
   const dt = Math.min(0.033, (t - lastT) / 1000);
   lastT = t;
   update(dt);
+  if (qualityScale > 0.6) monitorQuality(dt);
 
   // camera shake on the rendered view too
   if (shakeT > 0) {
