@@ -703,7 +703,7 @@ function launch(isBomb) {
 function spawnWave() {
   const diff = Math.min(1, elapsed / 80);
   const count = 1 + Math.floor(Math.random() * (2 + diff * 3));
-  const bombChance = window.__FN_NOBOMBS ? 0 : (0.1 + diff * 0.16);
+  const bombChance = 0.1 + diff * 0.16;
   let delay = 0;
   for (let i = 0; i < count; i++) {
     const bomb = Math.random() < bombChance;
@@ -1063,12 +1063,6 @@ function buildLogo() {
   const iTop = fy + fruit.baseY - fruit.size * 0.82;
   drawLeafSprout(ctx, iCenter + 4, iTop, 30);
 }
-
-// ---------- Debug hook (used only by automated tests; harmless in normal play) ----------
-window.__FN_FRUITS = () => fruits.filter(e => !e.dead).map(e => {
-  const s = worldToScreen(e.obj.position);
-  return { x: s.x, y: s.y, r: e.r * (H / viewH), bomb: e.isBomb, name: e.isBomb ? 'bomb' : e.f.name };
-});
 
 // ---------- Boot ----------
 resize();
