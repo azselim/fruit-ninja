@@ -14,6 +14,10 @@ python3 -m http.server 8000
 
 Then open the printed URL. Works with mouse and touch.
 
+### 🍣 Sushi Ninja
+
+There's a sushi-themed mode at **`/sushi/`** (same engine, different theme). Slice the sushi — tuna/cucumber/avocado maki, california roll, ikura gunkan, salmon/tamago/ebi nigiri, plus a rare wasabi bonus — and **don't slice the glass of milk** (it's the "bomb"). The theme is selected by `window.FN_THEME = 'sushi'` set in `sushi/index.html` before the shared `game.js` loads.
+
 ## How to play
 
 - **Drag** (mouse or finger) to swing your blade through the fruit.
